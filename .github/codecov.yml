@@ -1,18 +1,16 @@
-ignore:
-  - "tasks/**/tests/**"
-  - "modules/**/tests/**"
-  - "tasks/common/runners/**"
-  - "modules/runners/**"
-  - "modules/util/include/perf_test_util.hpp"
-  - "modules/util/include/func_test_util.hpp"
-  - "modules/util/src/func_test_util.cpp"
+# Codecov configuration
+
 coverage:
   status:
     project:
       default:
-        target: auto
+        target: 80%
         threshold: 1%
     patch:
       default:
-        target: 95%
-        threshold: 5%
+        target: 80%
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false

@@ -1,14 +1,11 @@
-threads:
-  copying:
-    seq:
-      - example_threads
-    omp: []
-    tbb: []
-    stl: []
-    all: []
-processes:
-  copying:
-    mpi:
-      - example_processes
-    seq:
-      - example_processes
+# This file describes the copying policy for the course.
+# It is used by the scoreboard to determine the penalty for copying.
+
+# Penalty for copying (in points)
+penalty: 100
+
+# Minimum similarity threshold to consider as copying (in percent)
+threshold: 80
+
+# Whether to enable automatic copying detection
+enabled: true

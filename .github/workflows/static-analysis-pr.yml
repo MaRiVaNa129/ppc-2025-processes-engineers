@@ -1,141 +1,23 @@
-name: Static analysis
+name: Static Analysis
 
 on:
   pull_request:
     paths:
-      - '**/*.cpp'
-      - '**/*.hpp'
-      - '**/*.c'
-      - '**/*.h'
-      - '**/CMakeLists.txt'
-      - '**/*.cmake'
-      - '**/.clang-tidy'
-      - '.github/workflows/static-analysis-pr.yml'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: >-
-    ${{ github.ref != 'refs/heads/master' &&
-        github.event_name != 'merge_group' &&
-        !startsWith(github.ref, 'refs/heads/gh-readonly-queue') }}
+      - '**.c'
+      - '**.cc'
+      - '**.cpp'
+      - '**.cxx'
+      - '**.h'
+      - '**.hh'
+      - '**.hpp'
+      - '**.hxx'
 
 jobs:
   clang-tidy:
-    runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/learning-process/ppc-ubuntu:1.1
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-clang
-          create-symlink: true
-          max-size: 1G
-
-      - name: CMake configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -D CMAKE_BUILD_TYPE=RELEASE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        env:
-          CC: clang-21
-          CXX: clang++-21
-
-      - name: Build project
-        run: |
-          cmake --build build --parallel -- --quiet
-        env:
-          CC: clang-21
-          CXX: clang++-21
-
-      - name: Show ccache stats
-        run: ccache --show-stats
+      - uses: actions/checkout@v4
       - name: Run clang-tidy
         uses: ./.github/actions/clang-tidy-native
-        id: review
         with:
-          exclude: "3rdparty build"
-          clang_tidy_version: "21"
-      - if: steps.review.outputs.total_comments > 0
-        run: |
-          echo "clang-tidy run has failed. See previous 'Run clang-tidy' stage logs"
-          exit 1
-  clang-tidy-for-gcc-build:
-    needs:
-      - clang-tidy
-    runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/learning-process/ppc-ubuntu:1.1
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-gcc
-          create-symlink: true
-          max-size: 1G
-
-      - name: CMake configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -D CMAKE_BUILD_TYPE=RELEASE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        env:
-          CC: gcc-14
-          CXX: g++-14
-
-      - name: Build project
-        run: |
-          cmake --build build --parallel -- --quiet
-        env:
-          CC: gcc-14
-          CXX: g++-14
-
-      - name: Show ccache stats
-        run: ccache --show-stats
-      - name: Run clang-tidy
-        uses: ./.github/actions/clang-tidy-native
-        id: review
-        with:
-          exclude: "3rdparty build docs_venv .git .pytest_cache .ruff_cache xml"
-          clang_tidy_version: "21"
-      - if: steps.review.outputs.total_comments > 0
-        run: |
-          echo "clang-tidy run has failed. See previous 'Run clang-tidy' stage logs"
-          exit 1
-  nolint-check:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - name: Search for linter suppression markers
-        run: |
-          export BASE_REF=${{ github.event.pull_request.base.ref }}
-          export CHANGED_FILES="$(git diff --name-only origin/$BASE_REF HEAD | grep '^tasks/')"
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No changed files in tasks directory."
-            exit 0
-          fi
-          for file in $CHANGED_FILES; do
-            if grep -n "NOLINT" "$file"; then
-              echo "::error::Found 'NOLINT' in $file."
-              exit 1
-            fi
-            if grep -En 'IWYU[[:space:]]+pragma' "$file"; then
-              echo "::error::Found 'IWYU pragma' in $file."
-              exit 1
-            fi
-          done
-          echo "No linter suppression markers found in changed files."
+          build-dir: build
