@@ -14,6 +14,7 @@ namespace shkenev_i_diff_betw_neighb_elem_vec {
 ShkenevIDiffBetwNeighbElemVecMPI::ShkenevIDiffBetwNeighbElemVecMPI(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
   GetInput() = in;
+  GetOutput() = 0;
 }
 
 bool ShkenevIDiffBetwNeighbElemVecMPI::ValidationImpl() {
@@ -72,9 +73,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       if (i < minus_proc) {
         proc_size += 1;
       }
-      if (i != 0) {
-        MPI_Send(vec.data() + flug, proc_size, MPI_INT, i, 0, MPI_COMM_WORLD);
-      }
+      MPI_Send(vec.data() + flug, proc_size, MPI_INT, i, 0, MPI_COMM_WORLD);
 
       flug += proc_size;
     }
@@ -91,33 +90,16 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
   }
 
   if (world_size > 1) {
-    int send_val;
-    if (l_n > 0) {
-      send_val = l_vec[l_n - 1];
-    } else {
-      send_val = 0;
+    if (world_rank < world_size - 1 && l_n > 0) {
+      int my_last = l_vec[l_n - 1];
+      MPI_Send(&my_last, 1, MPI_INT, world_rank + 1, 1, MPI_COMM_WORLD);
     }
-    int recv_val;
-
-    int send_to;
-    if (world_rank < world_size - 1) {
-      send_to = world_rank + 1;
-    } else {
-      send_to = MPI_PROC_NULL;
-    }
-
-    int recv_from;
-    if (world_rank > 0) {
-      recv_from = world_rank - 1;
-    } else {
-      recv_from = MPI_PROC_NULL;
-    }
-
-    MPI_Sendrecv(&send_val, 1, MPI_INT, send_to, 1, &recv_val, 1, MPI_INT, recv_from, 1, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
 
     if (world_rank > 0 && l_n > 0) {
-      int boun_diff = std::abs(recv_val - l_vec[0]);
+      int prev_last = 0;
+      MPI_Recv(&prev_last, 1, MPI_INT, world_rank - 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+      int boun_diff = std::abs(prev_last - l_vec[0]);
       if (boun_diff > l_max) {
         l_max = boun_diff;
       }
