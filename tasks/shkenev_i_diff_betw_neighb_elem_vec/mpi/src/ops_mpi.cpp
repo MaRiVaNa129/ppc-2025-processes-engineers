@@ -72,7 +72,10 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       if (i < minus_proc) {
         proc_size += 1;
       }
-      MPI_Send(vec.data() + flug, proc_size, MPI_INT, i, 0, MPI_COMM_WORLD);
+      if (i != 0) {
+        MPI_Send(vec.data() + flug, proc_size, MPI_INT, i, 0, MPI_COMM_WORLD);
+      }
+
       flug += proc_size;
     }
   } else {
