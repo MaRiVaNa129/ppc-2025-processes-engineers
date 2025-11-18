@@ -31,7 +31,8 @@ bool ShkenevIDiffBetwNeighbElemVecSEQ::RunImpl() {
   }
 
   int max_diff = 0;
-  for (int i = 0; i < vec.size() - 1; i++) {
+  int n = vec.size();
+  for (int i = 0; i < n - 1; i++) {
     int diff = std::abs(vec[i + 1] - vec[i]);
     if (diff > max_diff) {
       max_diff = diff;
