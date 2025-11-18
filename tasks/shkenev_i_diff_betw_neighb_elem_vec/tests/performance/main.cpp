@@ -13,7 +13,7 @@ namespace shkenev_i_diff_betw_neighb_elem_vec {
 class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
   void SetUp() override {
-    const int kVectorSize = 10 ^ 6;
+    const int kVectorSize = 1000000;
     input_data_.resize(kVectorSize);
 
     std::random_device random;
