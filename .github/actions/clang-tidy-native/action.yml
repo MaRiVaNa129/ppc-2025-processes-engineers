@@ -23,7 +23,7 @@ runs:
     - name: Verify clang-tidy installation
       shell: bash
       run: |
-        clang-tidy-${{ inputs.clang_tidy_version }} --version
+        clang-tidy --version  # ← ИЗМЕНИТЬ ЗДЕСЬ
 
     - name: Get changed files
       id: changed-files
@@ -75,7 +75,7 @@ runs:
             echo "Analyzing $file..."
             FILE_OUTPUT=$(mktemp)
 
-            if clang-tidy-${{ inputs.clang_tidy_version }} "$file" \
+            if clang-tidy "$file" \  # ← ИЗМЕНИТЬ ЗДЕСЬ
                  -p ${{ inputs.build_dir }} --format-style=file 2>&1 | tee "$FILE_OUTPUT"; then
               ISSUES=$(grep -c "warning:\|error:" "$FILE_OUTPUT" 2>/dev/null || echo "0")
               TOTAL_ISSUES=$((TOTAL_ISSUES + ${ISSUES:-0}))
