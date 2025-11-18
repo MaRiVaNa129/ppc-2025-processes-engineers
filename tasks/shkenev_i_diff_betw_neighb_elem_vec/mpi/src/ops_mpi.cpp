@@ -55,7 +55,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
   int min_proc = n / world_size;
   int minus_proc = n % world_size;
   int l_n = min_proc;
-  
+
   if (world_rank < minus_proc) {
     l_n += 1;
   }
