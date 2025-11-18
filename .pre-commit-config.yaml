@@ -46,6 +46,7 @@ repos:
     hooks:
       - id: shellcheck
         files: \.sh$
+        args: ["--external-sources"]
 
 # Configuration
 default_stages: [pre-commit]
