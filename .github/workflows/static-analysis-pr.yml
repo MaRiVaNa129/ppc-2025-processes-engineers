@@ -20,4 +20,4 @@ jobs:
       - name: Run clang-tidy
         uses: ./.github/actions/clang-tidy-native
         with:
-          build-dir: build
+          build_dir: build

@@ -24,7 +24,7 @@ bool ShkenevIDiffBetwNeighbElemVecSEQ::PreProcessingImpl() {
 }
 
 bool ShkenevIDiffBetwNeighbElemVecSEQ::RunImpl() {
-  std::vector<int> &vec = GetInput();
+  const std::vector<int> &vec = GetInput();
   int n = vec.size();
   if (n < 2) {
     GetOutput() = 0;
