@@ -1,11 +1,8 @@
 include(ExternalProject)
 
-get_filename_component(JSON_SOURCE_DIR
-                       "${CMAKE_CURRENT_LIST_DIR}/../3rdparty/json" ABSOLUTE)
-
 ExternalProject_Add(
   ppc_json
-  SOURCE_DIR "${JSON_SOURCE_DIR}"
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/3rdparty/json"
   PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ppc_json"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ppc_json/build"
   INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ppc_json/install"
