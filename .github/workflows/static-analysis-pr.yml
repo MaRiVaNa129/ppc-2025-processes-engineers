@@ -15,22 +15,13 @@ on:
 jobs:
   clang-tidy:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install clang-tidy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-tidy-17
-
-      - name: Configure CMake
-        run: |
-          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          cmake --build build -j$(nproc)
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # <-- ВАЖНО: загружаем json и другие submodule!
 
       - name: Run clang-tidy
         uses: ./.github/actions/clang-tidy-native
         with:
           build_dir: build
-          clang_tidy_version: 17
