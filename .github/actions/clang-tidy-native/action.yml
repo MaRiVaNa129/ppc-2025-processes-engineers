@@ -14,7 +14,17 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Run clang-tidy
+    - name: Configure CMake with compile commands
       shell: bash
       run: |
-        cd ${{ inputs.build-dir }} && run-clang-tidy
+        cmake -B ${{ inputs.build_dir }} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ${{ inputs.cmake-defs }}
+
+    - name: Copy compilation database to root
+      shell: bash
+      run: |
+        cp ${{ inputs.build_dir }}/compile_commands.json ./
+
+    - name: Run clang-tidy from project root
+      shell: bash
+      run: |
+        run-clang-tidy
