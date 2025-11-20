@@ -10,7 +10,6 @@ class ShkenevIDiffBetwNeighbElemVecMPI : public BaseTask {
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kMPI;
   }
-
   explicit ShkenevIDiffBetwNeighbElemVecMPI(const InType &in);
 
  private:
@@ -18,10 +17,13 @@ class ShkenevIDiffBetwNeighbElemVecMPI : public BaseTask {
   bool PreProcessingImpl() override;
   bool RunImpl() override;
   bool PostProcessingImpl() override;
-  void SendToAllProcesses(const std::vector<int> &vec, int my_size, int world_size, int base_size, int rem);
-  void ReceiveFromRoot(std::vector<int> &local_vec, int my_size);
-  void DistributeData(const std::vector<int> &vec, std::vector<int> &local_vec, int world_rank, int my_size,
-                      int world_size, int base_size, int rem);
+
+  int HandleSmallVector(const std::vector<int> &vec, int n);
+  void ComputeCountsAndDispls(int n, int world_size, std::vector<int> &cnt, std::vector<int> &disp);
+  void ScatterData(const std::vector<int> &vec, const std::vector<int> &cnt, const std::vector<int> &disp,
+                   std::vector<int> &l_vec, int world_rank);
+  int LocalCompute(const std::vector<int> &l_vec);
+  int BoundaryExchange(const std::vector<int> &l_vec, int world_rank, int world_size);
 };
 
 }  // namespace shkenev_i_diff_betw_neighb_elem_vec
