@@ -1,4 +1,5 @@
 name: Pages
+
 on:
   workflow_call:
   workflow_dispatch:
@@ -25,7 +26,6 @@ jobs:
         with:
           name: doxygen-documentation-xml
           path: xml
-
   build-sphinx:
     runs-on: ubuntu-24.04
     needs:
@@ -64,7 +64,6 @@ jobs:
         with:
           name: sphinx-documentation
           path: ./build/docs/_build/html
-
   build-scoreboard:
     runs-on: ubuntu-24.04
     steps:
@@ -103,7 +102,6 @@ jobs:
         with:
           name: scoreboard
           path: ./build/scoreboard/html/
-
   deploy-pages:
     if: github.ref == 'refs/heads/master'
     needs:

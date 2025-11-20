@@ -1,17 +1,25 @@
-name: Nightly Build
+name: Nightly routine
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # Run at 2 AM every day
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
-  build:
+  close-stale-prs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: |
-          mkdir build && cd build
-          cmake ..
-          make -j4
+      - uses: actions/stale@v10
+        with:
+          stale-pr-message: 'This pull request is stale for 2 weeks and is going to be closed in a week'
+          days-before-pr-stale: 14
+          days-before-issue-stale: -1
+          days-before-pr-close: 7
+          days-before-issue-close: -1
+          stale-pr-label: 'stale'
+          operations-per-run: 100
+          exempt-pr-labels: 'no_stale'

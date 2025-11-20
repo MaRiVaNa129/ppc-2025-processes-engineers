@@ -41,12 +41,11 @@ repos:
       - id: yamllint
 
   # Shell script linting with shellcheck
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.9.0.6
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0
     hooks:
       - id: shellcheck
         files: \.sh$
-        args: ["--external-sources"]
 
 # Configuration
 default_stages: [pre-commit]
