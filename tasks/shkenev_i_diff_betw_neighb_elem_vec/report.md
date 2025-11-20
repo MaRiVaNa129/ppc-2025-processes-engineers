@@ -371,6 +371,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
 
   GetOutput() = global_max;
 
+
   return true;
 }
 ```
