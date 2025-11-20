@@ -1,11 +1,10 @@
 #include "shkenev_i_diff_betw_neighb_elem_vec/seq/include/ops_seq.hpp"
 
-#include <numeric>
-#include <random>
+#include <algorithm>
+#include <cstdlib>
 #include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace shkenev_i_diff_betw_neighb_elem_vec {
 
@@ -25,7 +24,7 @@ bool ShkenevIDiffBetwNeighbElemVecSEQ::PreProcessingImpl() {
 
 bool ShkenevIDiffBetwNeighbElemVecSEQ::RunImpl() {
   const std::vector<int> &vec = GetInput();
-  int n = vec.size();
+  int n = static_cast<int>(vec.size());
   if (n < 2) {
     GetOutput() = 0;
     return true;
@@ -34,9 +33,7 @@ bool ShkenevIDiffBetwNeighbElemVecSEQ::RunImpl() {
   int max_diff = 0;
   for (int i = 0; i < n - 1; i++) {
     int diff = std::abs(vec[i + 1] - vec[i]);
-    if (diff > max_diff) {
-      max_diff = diff;
-    }
+    max_diff = std::max(diff, max_diff);
   }
 
   GetOutput() = max_diff;

@@ -2,12 +2,9 @@
 
 #include <mpi.h>
 
-#include <numeric>
-#include <random>
 #include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace shkenev_i_diff_betw_neighb_elem_vec {
 
@@ -26,12 +23,13 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::PreProcessingImpl() {
 }
 
 bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
-  int world_rank, world_size;
+  int world_rank = 0;
+  int world_size = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
   const std::vector<int> &vec = GetInput();
-  int n = vec.size();
+  int n = static_cast<int>(vec.size());
 
   if (n < 2) {
     GetOutput() = 0;
@@ -43,9 +41,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
     if (world_rank == 0) {
       for (int i = 0; i < n - 1; ++i) {
         int diff = std::abs(vec[i + 1] - vec[i]);
-        if (diff > result) {
-          result = diff;
-        }
+        result = std::max(result, diff);
       }
     }
     MPI_Bcast(&result, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -76,9 +72,9 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       std::copy(vec.begin(), vec.begin() + l_n, l_vec.begin());
     }
 
-    for (int p = 1; p < world_size; ++p) {
-      if (cnt[p] > 0) {
-        MPI_Send(vec.data() + disp[p], cnt[p], MPI_INT, p, 0, MPI_COMM_WORLD);
+    for (int proc = 1; p < world_size; ++p) {
+      if (cnt[proc] > 0) {
+        MPI_Send(vec.data() + disp[proc], cnt[proc], MPI_INT, proc, 0, MPI_COMM_WORLD);
       }
     }
   } else {
@@ -90,9 +86,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
   int l_max = 0;
   for (int i = 0; i < l_n - 1; ++i) {
     int diff = std::abs(l_vec[i + 1] - l_vec[i]);
-    if (diff > l_max) {
-      l_max = diff;
-    }
+    l_max = std::max(l_max, diff);
   }
 
   if (world_size > 1) {
@@ -101,9 +95,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       MPI_Recv(&prev_last, 1, MPI_INT, world_rank - 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
       int boundary_diff = std::abs(l_vec[0] - prev_last);
-      if (boundary_diff > l_max) {
-        l_max = boundary_diff;
-      }
+      l_max = std::max(l_max, diff);
     }
 
     if (world_rank < world_size - 1 && l_n > 0) {

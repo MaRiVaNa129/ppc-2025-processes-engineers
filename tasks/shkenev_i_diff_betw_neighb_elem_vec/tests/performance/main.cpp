@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <random>
-#include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
 #include "shkenev_i_diff_betw_neighb_elem_vec/mpi/include/ops_mpi.hpp"
