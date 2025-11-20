@@ -2,6 +2,8 @@
 
 #include <mpi.h>
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
@@ -72,7 +74,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       std::copy(vec.begin(), vec.begin() + l_n, l_vec.begin());
     }
 
-    for (int proc = 1; p < world_size; ++p) {
+    for (int proc = 1; proc < world_size; ++proc) {
       if (cnt[proc] > 0) {
         MPI_Send(vec.data() + disp[proc], cnt[proc], MPI_INT, proc, 0, MPI_COMM_WORLD);
       }
@@ -95,7 +97,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
       MPI_Recv(&prev_last, 1, MPI_INT, world_rank - 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
       int boundary_diff = std::abs(l_vec[0] - prev_last);
-      l_max = std::max(l_max, diff);
+      l_max = std::max(l_max, boundary_diff);
     }
 
     if (world_rank < world_size - 1 && l_n > 0) {

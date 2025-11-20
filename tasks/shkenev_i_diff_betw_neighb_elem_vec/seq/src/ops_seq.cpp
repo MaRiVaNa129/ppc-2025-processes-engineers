@@ -1,6 +1,7 @@
 #include "shkenev_i_diff_betw_neighb_elem_vec/seq/include/ops_seq.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <vector>
 
@@ -24,14 +25,14 @@ bool ShkenevIDiffBetwNeighbElemVecSEQ::PreProcessingImpl() {
 
 bool ShkenevIDiffBetwNeighbElemVecSEQ::RunImpl() {
   const std::vector<int> &vec = GetInput();
-  int n = static_cast<int>(vec.size());
+  std::size_t n = vec.size();
   if (n < 2) {
     GetOutput() = 0;
     return true;
   }
 
   int max_diff = 0;
-  for (int i = 0; i < n - 1; i++) {
+  for (std::size_t i = 0; i < n - 1; i++) {
     int diff = std::abs(vec[i + 1] - vec[i]);
     max_diff = std::max(diff, max_diff);
   }

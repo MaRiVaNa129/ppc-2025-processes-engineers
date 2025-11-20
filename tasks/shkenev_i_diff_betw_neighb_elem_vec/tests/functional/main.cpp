@@ -1,15 +1,9 @@
 #include <gtest/gtest.h>
-#include <stb/stb_image.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <numeric>
-#include <stdexcept>
-#include <string>
 #include <tuple>
-#include <utility>
 #include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
@@ -44,7 +38,7 @@ class ShkenevIDiffBetwNeighbElemVecFuncTests : public ppc::util::BaseRunFuncTest
   }
 
  private:
-  InType input_data_{};
+  InType input_data_;
   OutType expected_{};
 };
 

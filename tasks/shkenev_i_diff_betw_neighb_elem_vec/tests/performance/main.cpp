@@ -12,14 +12,14 @@ namespace shkenev_i_diff_betw_neighb_elem_vec {
 class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
   void SetUp() override {
-    const int kVectorSize = 100000000;
-    input_data_.resize(kVectorSize);
+    const int k_vector_size = 100000000;
+    input_data_.resize(k_vector_size);
 
     std::random_device random;
     std::mt19937 gen(random());
     std::uniform_int_distribution<int> dist(0, 1000);
 
-    for (int i = 0; i < kVectorSize; i++) {
+    for (int i = 0; i < k_vector_size; i++) {
       input_data_[i] = dist(gen);
     }
   }
@@ -33,7 +33,7 @@ class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTest
   }
 
  private:
-  InType input_data_{};
+  InType input_data_;
 };
 
 TEST_P(ShkenevIDiffBetwNeighbElemVecPerfTests, RunPerfModes) {
