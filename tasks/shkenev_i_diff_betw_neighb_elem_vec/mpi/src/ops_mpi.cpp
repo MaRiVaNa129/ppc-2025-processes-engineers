@@ -11,23 +11,11 @@
 
 namespace shkenev_i_diff_betw_neighb_elem_vec {
 
-ShkenevIDiffBetwNeighbElemVecMPI::ShkenevIDiffBetwNeighbElemVecMPI(const InType &in) {
-  SetTypeOfTask(GetStaticTypeOfTask());
-  GetInput() = in;
-  GetOutput() = 0;
-}
-
-bool ShkenevIDiffBetwNeighbElemVecMPI::ValidationImpl() {
-  return true;
-}
-
-bool ShkenevIDiffBetwNeighbElemVecMPI::PreProcessingImpl() {
-  return true;
-}
+namespace {
 
 int HandleSmallVector(const std::vector<int> &vec, int n) {
   int result = 0;
-  for (int i = 0; i < n - 1; i++) {
+  for (int i = 0; i < n - 1; ++i) {
     int diff = std::abs(vec[i + 1] - vec[i]);
     result = std::max(result, diff);
   }
@@ -97,6 +85,21 @@ int BoundaryExchange(const std::vector<int> &l_vec, int world_rank, int world_si
   }
 
   return boundary;
+}
+}  // namespace
+
+ShkenevIDiffBetwNeighbElemVecMPI::ShkenevIDiffBetwNeighbElemVecMPI(const InType &in) {
+  SetTypeOfTask(GetStaticTypeOfTask());
+  GetInput() = in;
+  GetOutput() = 0;
+}
+
+bool ShkenevIDiffBetwNeighbElemVecMPI::ValidationImpl() {
+  return true;
+}
+
+bool ShkenevIDiffBetwNeighbElemVecMPI::PreProcessingImpl() {
+  return true;
 }
 
 bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
