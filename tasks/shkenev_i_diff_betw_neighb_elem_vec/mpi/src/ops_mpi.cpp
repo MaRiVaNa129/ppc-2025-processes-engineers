@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
@@ -24,37 +25,29 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::PreProcessingImpl() {
   return true;
 }
 
-int ShkenevIDiffBetwNeighbElemVecMPI::HandleSmallVector(const std::vector<int> &vec, int n) {
+int HandleSmallVector(const std::vector<int> &vec, int n) {
   int result = 0;
   for (int i = 0; i < n - 1; i++) {
     int diff = std::abs(vec[i + 1] - vec[i]);
-    if (diff > result) {
-      result = diff;
-    }
+    result = std::max(result, diff);
   }
   return result;
 }
 
-void ShkenevIDiffBetwNeighbElemVecMPI::ComputeCountsAndDispls(int n, int world_size, std::vector<int> &cnt,
-                                                              std::vector<int> &disp) {
+void ComputeCountsAndDispls(int n, int world_size, std::vector<int> &cnt, std::vector<int> &disp) {
   int base_size = n / world_size;
   int rem = n % world_size;
 
   int shift = 0;
   for (int i = 0; i < world_size; ++i) {
-    if (i < rem) {
-      cnt[i] = base_size + 1;
-    } else {
-      cnt[i] = base_size;
-    }
+    cnt[i] = base_size + (i < rem ? 1 : 0);
     disp[i] = shift;
     shift += cnt[i];
   }
 }
 
-void ShkenevIDiffBetwNeighbElemVecMPI::ScatterData(const std::vector<int> &vec, const std::vector<int> &cnt,
-                                                   const std::vector<int> &disp, std::vector<int> &l_vec,
-                                                   int world_rank) {
+void ScatterData(const std::vector<int> &vec, const std::vector<int> &cnt, const std::vector<int> &disp,
+                 std::vector<int> &l_vec, int world_rank) {
   size_t l_n = cnt[world_rank];
 
   if (world_rank == 0) {
@@ -76,21 +69,19 @@ void ShkenevIDiffBetwNeighbElemVecMPI::ScatterData(const std::vector<int> &vec, 
   }
 }
 
-int ShkenevIDiffBetwNeighbElemVecMPI::LocalCompute(const std::vector<int> &l_vec) {
+int LocalCompute(const std::vector<int> &l_vec) {
   int l_max = 0;
   int l_n = static_cast<int>(l_vec.size());
 
   for (int i = 0; i < l_n - 1; ++i) {
     int diff = std::abs(l_vec[i + 1] - l_vec[i]);
-    if (diff > l_max) {
-      l_max = diff;
-    }
+    l_max = std::max(l_max, diff);
   }
 
   return l_max;
 }
 
-int ShkenevIDiffBetwNeighbElemVecMPI::BoundaryExchange(const std::vector<int> &l_vec, int world_rank, int world_size) {
+int BoundaryExchange(const std::vector<int> &l_vec, int world_rank, int world_size) {
   int l_n = static_cast<int>(l_vec.size());
   int boundary = 0;
 
@@ -124,10 +115,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
   }
 
   if (world_size > n) {
-    int result = 0;
-    if (world_rank == 0) {
-      result = HandleSmallVector(vec, n);
-    }
+    int result = (world_rank == 0 ? HandleSmallVector(vec, n) : 0);
     MPI_Bcast(&result, 1, MPI_INT, 0, MPI_COMM_WORLD);
     GetOutput() = result;
     return true;
@@ -142,9 +130,7 @@ bool ShkenevIDiffBetwNeighbElemVecMPI::RunImpl() {
 
   int local_max = LocalCompute(l_vec);
   int boundary = BoundaryExchange(l_vec, world_rank, world_size);
-  if (boundary > local_max) {
-    local_max = boundary;
-  }
+  local_max = std::max(local_max, boundary);
 
   int global_max = 0;
   MPI_Reduce(&local_max, &global_max, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
