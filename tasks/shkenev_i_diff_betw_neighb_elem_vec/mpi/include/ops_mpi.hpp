@@ -10,6 +10,7 @@ class ShkenevIDiffBetwNeighbElemVecMPI : public BaseTask {
   static constexpr ppc::task::TypeOfTask GetStaticTypeOfTask() {
     return ppc::task::TypeOfTask::kMPI;
   }
+
   explicit ShkenevIDiffBetwNeighbElemVecMPI(const InType &in);
 
  private:
@@ -17,6 +18,10 @@ class ShkenevIDiffBetwNeighbElemVecMPI : public BaseTask {
   bool PreProcessingImpl() override;
   bool RunImpl() override;
   bool PostProcessingImpl() override;
+  void SendToAllProcesses(const std::vector<int> &vec, int my_size, int world_size, int base_size, int rem);
+  void ReceiveFromRoot(std::vector<int> &local_vec, int my_size);
+  void DistributeData(const std::vector<int> &vec, std::vector<int> &local_vec, int world_rank, int my_size,
+                      int world_size, int base_size, int rem);
 };
 
 }  // namespace shkenev_i_diff_betw_neighb_elem_vec
