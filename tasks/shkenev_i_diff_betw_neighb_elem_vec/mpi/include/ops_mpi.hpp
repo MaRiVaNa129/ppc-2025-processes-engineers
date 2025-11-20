@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
 #include "task/include/task.hpp"
 

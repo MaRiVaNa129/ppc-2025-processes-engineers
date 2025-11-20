@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <random>
-#include <vector>
 
 #include "shkenev_i_diff_betw_neighb_elem_vec/common/include/common.hpp"
 #include "shkenev_i_diff_betw_neighb_elem_vec/mpi/include/ops_mpi.hpp"
@@ -29,12 +29,11 @@ class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTest
         input_data_[i] = large_dist(gen);
       }
     }
+
     expected_max_diff_ = 0;
     for (int i = 0; i < k_vector_size - 1; i++) {
       int diff = std::abs(input_data_[i + 1] - input_data_[i]);
-      if (diff > expected_max_diff_) {
-        expected_max_diff_ = diff;
-      }
+      expected_max_diff_ = std::max(diff, expected_max_diff_);
     }
   }
 
@@ -48,7 +47,7 @@ class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTest
 
  private:
   InType input_data_;
-  int expected_max_diff_;
+  int expected_max_diff_ = 0;
 };
 
 TEST_P(ShkenevIDiffBetwNeighbElemVecPerfTests, RunPerfModes) {
@@ -60,7 +59,6 @@ const auto kAllPerfTasks =
         PPC_SETTINGS_shkenev_i_diff_betw_neighb_elem_vec);
 
 const auto kGtestValues = ppc::util::TupleToGTestValues(kAllPerfTasks);
-
 const auto kPerfTestName = ShkenevIDiffBetwNeighbElemVecPerfTests::CustomPerfTestName;
 
 INSTANTIATE_TEST_SUITE_P(PerfTests, ShkenevIDiffBetwNeighbElemVecPerfTests, kGtestValues, kPerfTestName);
