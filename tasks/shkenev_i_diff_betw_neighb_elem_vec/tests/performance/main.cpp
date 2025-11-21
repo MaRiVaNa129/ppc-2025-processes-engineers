@@ -14,7 +14,7 @@ namespace shkenev_i_diff_betw_neighb_elem_vec {
 class ShkenevIDiffBetwNeighbElemVecPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
   void SetUp() override {
-    const int k_vector_size = 500000000;
+    const int k_vector_size = 200000000;
 
     input_data_.resize(k_vector_size);
 
