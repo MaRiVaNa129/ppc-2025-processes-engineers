@@ -13,7 +13,7 @@ namespace shkenev_i_matvect_using_vertical_ribbon {
 
 class ShkenevImatvectUsingVerticalRibbonPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  public:
-  static constexpr size_t kSize = 100;
+  static constexpr size_t kSize = 1000;
 
  protected:
   void SetUp() override {
