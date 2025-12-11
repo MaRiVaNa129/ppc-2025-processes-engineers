@@ -23,10 +23,10 @@ bool ShkenevImatvectUsingVerticalRibbonSEQ::ValidationImpl() {
     return false;
   }
 
-  int rows_a = matrix_a.size();
-  int cols_a = matrix_a[0].size();
+  size_t rows_a = matrix_a.size();
+  size_t cols_a = matrix_a[0].size();
 
-  for (int i = 0; i < rows_a; i++) {
+  for (size_t i = 0; i < rows_a; i++) {
     if (matrix_a[i].size() != cols_a) {
       return false;
     }
@@ -36,10 +36,10 @@ bool ShkenevImatvectUsingVerticalRibbonSEQ::ValidationImpl() {
     return false;
   }
 
-  int rows_b = matrix_b.size();
-  int cols_b = matrix_b[0].size();
+  size_t rows_b = matrix_b.size();
+  size_t cols_b = matrix_b[0].size();
 
-  for (int i = 0; i < rows_b; i++) {
+  for (size_t i = 0; i < rows_b; i++) {
     if (matrix_b[i].size() != cols_b) {
       return false;
     }
@@ -61,15 +61,15 @@ bool ShkenevImatvectUsingVerticalRibbonSEQ::RunImpl() {
   const auto &matrix_a = GetInput().first;
   const auto &matrix_b = GetInput().second;
 
-  int rows_a = matrix_a.size();
-  int cols_a = matrix_a[0].size();
-  int cols_b = matrix_b[0].size();
+  size_t rows_a = matrix_a.size();
+  size_t cols_a = matrix_a[0].size();
+  size_t cols_b = matrix_b[0].size();
 
   std::vector<std::vector<double>> result_matrix(rows_a, std::vector<double>(cols_b, 0.0));
 
-  for (int i = 0; i < rows_a; i++) {
-    for (int j = 0; j < cols_a; j++) {
-      for (int k = 0; k < cols_b; k++) {
+  for (size_t i = 0; i < rows_a; i++) {
+    for (size_t j = 0; j < cols_a; j++) {
+      for (size_t k = 0; k < cols_b; k++) {
         result_matrix[i][k] += matrix_a[i][j] * matrix_b[j][k];
       }
     }
