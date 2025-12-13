@@ -232,6 +232,10 @@ void CreateOutputMatrix(const std::vector<double> &flat_matrix, OutType &result,
   }
 }
 
+bool AreDimensionsValid(int rows_a, int cols_a, int cols_b) {
+  return rows_a > 0 && cols_a > 0 && cols_b >= 0;
+}
+
 }  // namespace
 
 bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
@@ -264,7 +268,7 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
 
   BroadcastMatrixDimensions(rows_a, cols_a, cols_b);
 
-  if (rows_a <= 0 || cols_a <= 0 || cols_b < 0) {
+  if (!AreDimensionsValid(rows_a, cols_a, cols_b)) {
     GetOutput() = OutType{};
     return false;
   }
