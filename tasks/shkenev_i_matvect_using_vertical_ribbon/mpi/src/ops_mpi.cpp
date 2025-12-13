@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <ranges>
 #include <vector>
 
 #include "shkenev_i_matvect_using_vertical_ribbon/common/include/common.hpp"
@@ -25,27 +26,31 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::ValidationImpl() {
   }
 
   const auto &in = GetInput();
-  const auto &matrix_a = in.first;
-  const auto &matrix_b = in.second;
+  const auto &a = in.first;
+  const auto &b = in.second;
 
-  if (matrix_a.empty() || matrix_b.empty()) {
+  if (a.empty() || b.empty()) {
     return false;
   }
 
-  const std::size_t cols_a = matrix_a[0].size();
-  for (const auto &row : matrix_a) {
-    if (row.size() != cols_a) {
-      return false;
-    }
+  size_t cols_a = a[0].size();
+
+  if (!std::ranges::all_of(a, [cols_a](const auto &row) { return row.size() == cols_a; })) {
+    return false;
   }
 
-  const std::size_t rows_b = matrix_b.size();
+  size_t rows_b = b.size();
   if (rows_b != cols_a) {
     return false;
   }
 
-  const std::size_t cols_b = matrix_b[0].size();
-  return std::ranges::all_of(matrix_b, [cols_b](const auto &row) { return row.size() == cols_b; });
+  size_t cols_b = b[0].size();
+
+  if (!std::ranges::all_of(b, [cols_b](const auto &row) { return row.size() == cols_b; })) {
+    return false;
+  }
+
+  return true;
 }
 
 bool ShkenevImatvectUsingVerticalRibbonMPI::PreProcessingImpl() {
@@ -53,205 +58,178 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::PreProcessingImpl() {
 }
 
 namespace {
+void BroadcastMatrixDimensions(int &rows_a, int &cols_a, int &cols_b) {
+  MPI_Bcast(&rows_a, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&cols_a, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&cols_b, 1, MPI_INT, 0, MPI_COMM_WORLD);
+}
 
-void FillAFlatFromMatrixA(const InType &in, std::vector<double> &a_flat, int rows_a, int cols_a) {
-  const auto &matrix_a = in.first;
+void FlattenMatrices(const std::vector<std::vector<double>> &a, const std::vector<std::vector<double>> &b,
+                     std::vector<double> &aflat, std::vector<double> &bflat, int rows_a, int cols_a, int cols_b) {
   for (int i = 0; i < rows_a; ++i) {
     for (int j = 0; j < cols_a; ++j) {
-      a_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_a) + static_cast<std::size_t>(j)] =
-          matrix_a[i][j];
+      aflat[(static_cast<size_t>(i) * cols_a) + j] = a[i][j];
     }
   }
-}
 
-void FillBFlatFromMatrixB(const InType &in, std::vector<double> &b_flat, int cols_a, int cols_b) {
-  const auto &matrix_b = in.second;
   for (int i = 0; i < cols_a; ++i) {
     for (int j = 0; j < cols_b; ++j) {
-      b_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(j)] =
-          matrix_b[i][j];
+      bflat[(static_cast<size_t>(i) * cols_b) + j] = b[i][j];
     }
   }
 }
 
-void CalculateElementCFromFlattened(const std::vector<double> &a_flat, const std::vector<double> &b_flat,
-                                    std::vector<double> &c_flat, int cols_a, int cols_b, int i, int j, int k) {
-  const double a_val =
-      a_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_a) + static_cast<std::size_t>(j)];
-  if (a_val == 0.0) {
-    return;
-  }
-
-  const double b_val =
-      b_flat[static_cast<std::size_t>(j) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(k)];
-  c_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(k)] += a_val * b_val;
-}
-
-void CalculateRowCFromFlattened(const std::vector<double> &a_flat, const std::vector<double> &b_flat,
-                                std::vector<double> &c_flat, int cols_a, int cols_b, int i) {  // rows_a убран
-  for (int j = 0; j < cols_a; ++j) {
-    for (int k = 0; k < cols_b; ++k) {
-      CalculateElementCFromFlattened(a_flat, b_flat, c_flat, cols_a, cols_b, i, j, k);
-    }
-  }
-}
-
-void CalculateCFlatFromFlattened(const std::vector<double> &a_flat, const std::vector<double> &b_flat,
-                                 std::vector<double> &c_flat, int rows_a, int cols_a, int cols_b) {
+void SerialMultiplication(const std::vector<double> &aflat, const std::vector<double> &bflat,
+                          std::vector<double> &cflat, int rows_a, int cols_a, int cols_b) {
   for (int i = 0; i < rows_a; ++i) {
-    CalculateRowCFromFlattened(a_flat, b_flat, c_flat, cols_a, cols_b, i);  // rows_a убран
+    for (int j = 0; j < cols_a; ++j) {
+      double a_val = aflat[(static_cast<size_t>(i) * cols_a) + j];
+      if (a_val == 0.0) {
+        continue;
+      }
+
+      for (int k = 0; k < cols_b; ++k) {
+        double b_val = bflat[(static_cast<size_t>(j) * cols_b) + k];
+        cflat[(static_cast<size_t>(i) * cols_b) + k] += a_val * b_val;
+      }
+    }
   }
 }
 
-void FillResultFromCFlat(const std::vector<double> &c_flat, OutType &result, int rows_a, int cols_b) {
+void DistributeStripes(int world_size, const std::vector<std::vector<double>> &b, int base, int rem,
+                       std::vector<double> &bstrip, int rank, int cols_a, int my_width) {
+  const int tag_b = 101;
+
+  if (rank == 0) {
+    for (int proc = 0; proc < world_size; ++proc) {
+      int proc_start = proc * base;
+      if (proc < rem) {
+        proc_start += proc;
+      } else {
+        proc_start += rem;
+      }
+
+      int proc_width = base;
+      if (proc < rem) {
+        proc_width += 1;
+      }
+
+      if (proc_width <= 0) {
+        continue;
+      }
+
+      std::vector<double> sendbuf(static_cast<size_t>(cols_a) * static_cast<size_t>(proc_width));
+      for (int row = 0; row < cols_a; ++row) {
+        for (int kk = 0; kk < proc_width; ++kk) {
+          int global_k = proc_start + kk;
+          sendbuf[(static_cast<size_t>(row) * proc_width) + kk] = b[row][global_k];
+        }
+      }
+
+      if (proc == 0) {
+        bstrip = std::move(sendbuf);
+      } else {
+        MPI_Send(sendbuf.data(), cols_a * proc_width, MPI_DOUBLE, proc, tag_b, MPI_COMM_WORLD);
+      }
+    }
+  } else if (my_width > 0) {
+    MPI_Recv(bstrip.data(), cols_a * my_width, MPI_DOUBLE, 0, tag_b, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  }
+}
+
+void MultiplyStrip(const std::vector<double> &aflat, const std::vector<double> &bstrip, std::vector<double> &cstrip,
+                   int rows_a, int cols_a, int my_width) {
   for (int i = 0; i < rows_a; ++i) {
-    for (int k = 0; k < cols_b; ++k) {
-      result[i][k] =
-          c_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(k)];
+    for (int j = 0; j < cols_a; ++j) {
+      double aij = aflat[(static_cast<size_t>(i) * cols_a) + j];
+      if (aij == 0.0) {
+        continue;
+      }
+      for (int k = 0; k < my_width; ++k) {
+        cstrip[(static_cast<size_t>(i) * my_width) + k] += aij * bstrip[(static_cast<size_t>(j) * my_width) + k];
+      }
     }
   }
 }
 
-void FillSendBufferFromMatrixB(const InType &in, std::vector<double> &send_buffer, int cols_a, int proc_start,
-                               int proc_width) {
-  const auto &matrix_b = in.second;
-  for (int row = 0; row < cols_a; ++row) {
-    for (int kk = 0; kk < proc_width; ++kk) {
-      const int global_k = proc_start + kk;
-      send_buffer[static_cast<std::size_t>(row) * static_cast<std::size_t>(proc_width) + static_cast<std::size_t>(kk)] =
-          matrix_b[row][global_k];
-    }
-  }
-}
+void GatherResults(int world_size, int rank, int rows_a, int cols_b, int base, int rem,
+                   const std::vector<double> &cstrip, int my_width, int my_start, std::vector<double> &full_result) {
+  const int tag_c = 102;
 
-void DistributeBStripToProcess(const InType &in, int cols_a, int cols_b, int world_size, std::vector<double> &b_strip,
-                               int rank) {
-  if (rank != 0) {
-    return;
-  }
-
-  const int base = cols_b / world_size;
-  const int remainder = cols_b % world_size;
-
-  for (int proc_idx = 0; proc_idx < world_size; ++proc_idx) {
-    const int proc_start = proc_idx * base + std::min(proc_idx, remainder);
-    const int proc_width = base + (proc_idx < remainder ? 1 : 0);
-
-    if (proc_width <= 0) {
-      continue;
+  if (rank == 0) {
+    if (my_width > 0) {
+      for (int i = 0; i < rows_a; ++i) {
+        for (int k = 0; k < my_width; ++k) {
+          int global_k = my_start + k;
+          full_result[(static_cast<size_t>(i) * cols_b) + global_k] = cstrip[(static_cast<size_t>(i) * my_width) + k];
+        }
+      }
     }
 
-    std::vector<double> send_buffer(static_cast<std::size_t>(cols_a) * static_cast<std::size_t>(proc_width));
+    for (int proc = 1; proc < world_size; ++proc) {
+      int proc_start = proc * base;
+      if (proc < rem) {
+        proc_start += proc;
+      } else {
+        proc_start += rem;
+      }
 
-    FillSendBufferFromMatrixB(in, send_buffer, cols_a, proc_start, proc_width);
+      int proc_width = base;
+      if (proc < rem) {
+        proc_width += 1;
+      }
 
-    if (proc_idx == 0) {
-      b_strip = std::move(send_buffer);
-    } else {
-      MPI_Send(send_buffer.data(), cols_a * proc_width, MPI_DOUBLE, proc_idx, 101, MPI_COMM_WORLD);
+      if (proc_width <= 0) {
+        MPI_Status status;
+        MPI_Probe(proc, tag_c, MPI_COMM_WORLD, &status);
+        int count = 0;
+        MPI_Get_count(&status, MPI_DOUBLE, &count);
+        if (count > 0) {
+          std::vector<double> dummy(count);
+          MPI_Recv(dummy.data(), count, MPI_DOUBLE, proc, tag_c, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        } else {
+          MPI_Recv(nullptr, 0, MPI_DOUBLE, proc, tag_c, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        continue;
+      }
+
+      std::vector<double> recvbuf(static_cast<size_t>(rows_a) * static_cast<size_t>(proc_width));
+      MPI_Recv(recvbuf.data(), rows_a * proc_width, MPI_DOUBLE, proc, tag_c, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+      for (int i = 0; i < rows_a; ++i) {
+        for (int k = 0; k < proc_width; ++k) {
+          int global_k = proc_start + k;
+          full_result[(static_cast<size_t>(i) * cols_b) + global_k] =
+              recvbuf[(static_cast<size_t>(i) * proc_width) + k];
+        }
+      }
     }
-  }
-}
-
-void CalculateElementCStrip(const std::vector<double> &a_flat, const std::vector<double> &b_strip,
-                            std::vector<double> &c_strip, int cols_a, int my_width, int i, int j, int k) {
-  const double aij =
-      a_flat[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_a) + static_cast<std::size_t>(j)];
-  if (aij == 0.0) {
-    return;
-  }
-
-  c_strip[static_cast<std::size_t>(i) * static_cast<std::size_t>(my_width) + static_cast<std::size_t>(k)] +=
-      aij * b_strip[static_cast<std::size_t>(j) * static_cast<std::size_t>(my_width) + static_cast<std::size_t>(k)];
-}
-
-void CalculateRowCStrip(const std::vector<double> &a_flat, const std::vector<double> &b_strip,
-                        std::vector<double> &c_strip, int cols_a, int my_width, int i) {
-  for (int j = 0; j < cols_a; ++j) {
-    for (int k = 0; k < my_width; ++k) {
-      CalculateElementCStrip(a_flat, b_strip, c_strip, cols_a, my_width, i, j, k);
-    }
-  }
-}
-
-void CalculateCStripFromStrips(const std::vector<double> &a_flat, const std::vector<double> &b_strip,
-                               std::vector<double> &c_strip, int rows_a, int cols_a, int my_width) {
-  for (int i = 0; i < rows_a; ++i) {
-    CalculateRowCStrip(a_flat, b_strip, c_strip, cols_a, my_width, i);
-  }
-}
-
-void FillFullResultFromCStrip(std::vector<double> &full_result, const std::vector<double> &c_strip, int rows_a,
-                              int cols_b, int proc_start, int proc_width) {
-  for (int i = 0; i < rows_a; ++i) {
-    for (int k = 0; k < proc_width; ++k) {
-      const int global_k = proc_start + k;
-      full_result[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(global_k)] =
-          c_strip[static_cast<std::size_t>(i) * static_cast<std::size_t>(proc_width) + static_cast<std::size_t>(k)];
-    }
-  }
-}
-
-void ProcessEmptyResult(int proc_idx) {
-  MPI_Status status;
-  MPI_Probe(proc_idx, 102, MPI_COMM_WORLD, &status);
-  int count = 0;
-  MPI_Get_count(&status, MPI_DOUBLE, &count);
-  if (count > 0) {
-    std::vector<double> dummy(count);
-    MPI_Recv(dummy.data(), count, MPI_DOUBLE, proc_idx, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  } else if (my_width > 0) {
+    MPI_Send(cstrip.data(), rows_a * my_width, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
   } else {
-    MPI_Recv(nullptr, 0, MPI_DOUBLE, proc_idx, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Send(nullptr, 0, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
   }
 }
 
-void ProcessNonEmptyResult(int proc_idx, int proc_start, int proc_width, int rows_a, int cols_b,
-                           std::vector<double> &full_result) {
-  std::vector<double> receive_buffer(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(proc_width));
-  MPI_Recv(receive_buffer.data(), rows_a * proc_width, MPI_DOUBLE, proc_idx, 102, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+void BroadcastFullResult(int rank, int world_size, const std::vector<double> &full_result,
+                         std::vector<double> &local_full_result, int rows_a, int cols_b) {
+  const int tag_result = 103;
 
-  FillFullResultFromCStrip(full_result, receive_buffer, rows_a, cols_b, proc_start, proc_width);
-}
-
-void GatherResultsFromWorkers(std::vector<double> &full_result, int rows_a, int cols_b, int world_size,
-                              const std::vector<double> &c_strip, int my_start, int my_width) {
-  const int base = cols_b / world_size;
-  const int remainder = cols_b % world_size;
-
-  if (my_width > 0) {
-    FillFullResultFromCStrip(full_result, c_strip, rows_a, cols_b, my_start, my_width);
-  }
-
-  for (int proc_idx = 1; proc_idx < world_size; ++proc_idx) {
-    const int proc_start = proc_idx * base + std::min(proc_idx, remainder);
-    const int proc_width = base + (proc_idx < remainder ? 1 : 0);
-
-    if (proc_width <= 0) {
-      ProcessEmptyResult(proc_idx);
-      continue;
+  if (rank == 0) {
+    for (int proc = 1; proc < world_size; ++proc) {
+      MPI_Send(full_result.data(), rows_a * cols_b, MPI_DOUBLE, proc, tag_result, MPI_COMM_WORLD);
     }
-
-    ProcessNonEmptyResult(proc_idx, proc_start, proc_width, rows_a, cols_b, full_result);
+  } else {
+    MPI_Recv(local_full_result.data(), rows_a * cols_b, MPI_DOUBLE, 0, tag_result, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 }
 
-void FillResultFromFullResult(const std::vector<double> &full_result, OutType &result, int rows_a, int cols_b) {
+void CreateOutputMatrix(const std::vector<double> &flat_matrix, OutType &result, int rows_a, int cols_b) {
   for (int i = 0; i < rows_a; ++i) {
     for (int k = 0; k < cols_b; ++k) {
-      result[i][k] =
-          full_result[static_cast<std::size_t>(i) * static_cast<std::size_t>(cols_b) + static_cast<std::size_t>(k)];
+      result[i][k] = flat_matrix[(static_cast<size_t>(i) * cols_b) + k];
     }
   }
-}
-
-void SendResultToWorkers(const std::vector<double> &full_result, int rows_a, int cols_b, int world_size) {
-  for (int proc_idx = 1; proc_idx < world_size; ++proc_idx) {
-    MPI_Send(full_result.data(), rows_a * cols_b, MPI_DOUBLE, proc_idx, 103, MPI_COMM_WORLD);
-  }
-}
-
-void ReceiveResultFromMaster(std::vector<double> &full_result, int rows_a, int cols_b) {
-  MPI_Recv(full_result.data(), rows_a * cols_b, MPI_DOUBLE, 0, 103, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
 }  // namespace
@@ -268,16 +246,23 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
 
   if (rank == 0) {
     const auto &in = GetInput();
-    const auto &matrix_a = in.first;
-    const auto &matrix_b = in.second;
-    rows_a = static_cast<int>(matrix_a.size());
-    cols_a = static_cast<int>(matrix_a.empty() ? 0 : matrix_a[0].size());
-    cols_b = static_cast<int>(matrix_b.empty() ? 0 : matrix_b[0].size());
+    const auto &a = in.first;
+    const auto &b = in.second;
+    rows_a = static_cast<int>(a.size());
+    if (a.empty()) {
+      cols_a = 0;
+    } else {
+      cols_a = static_cast<int>(a[0].size());
+    }
+
+    if (b.empty()) {
+      cols_b = 0;
+    } else {
+      cols_b = static_cast<int>(b[0].size());
+    }
   }
 
-  MPI_Bcast(&rows_a, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&cols_a, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&cols_b, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  BroadcastMatrixDimensions(rows_a, cols_a, cols_b);
 
   if (rows_a <= 0 || cols_a <= 0 || cols_b < 0) {
     GetOutput() = OutType{};
@@ -285,85 +270,97 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
   }
 
   if (cols_b < world_size) {
-    std::vector<double> a_flat(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(cols_a), 0.0);
-    std::vector<double> b_flat(static_cast<std::size_t>(cols_a) * static_cast<std::size_t>(cols_b), 0.0);
+    std::vector<double> aflat(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_a), 0.0);
+    std::vector<double> bflat(static_cast<size_t>(cols_a) * static_cast<size_t>(cols_b), 0.0);
 
     if (rank == 0) {
-      FillAFlatFromMatrixA(GetInput(), a_flat, rows_a, cols_a);
-      FillBFlatFromMatrixB(GetInput(), b_flat, cols_a, cols_b);
+      const auto &in = GetInput();
+      const auto &a = in.first;
+      const auto &b = in.second;
+      FlattenMatrices(a, b, aflat, bflat, rows_a, cols_a, cols_b);
     }
 
-    MPI_Bcast(a_flat.data(), rows_a * cols_a, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Bcast(b_flat.data(), cols_a * cols_b, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(aflat.data(), rows_a * cols_a, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(bflat.data(), cols_a * cols_b, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    std::vector<double> c_flat(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(cols_b), 0.0);
-    CalculateCFlatFromFlattened(a_flat, b_flat, c_flat, rows_a, cols_a, cols_b);
+    std::vector<double> cflat(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_b), 0.0);
+    SerialMultiplication(aflat, bflat, cflat, rows_a, cols_a, cols_b);
 
-    if (rank == 0) {
-      OutType result(rows_a, std::vector<double>(cols_b, 0.0));
-      FillResultFromCFlat(c_flat, result, rows_a, cols_b);
-      GetOutput() = std::move(result);
-    } else {
-      GetOutput() = OutType(rows_a, std::vector<double>(cols_b, 0.0));
-    }
-
+    OutType result(rows_a, std::vector<double>(cols_b, 0.0));
+    CreateOutputMatrix(cflat, result, rows_a, cols_b);
+    GetOutput() = std::move(result);
     return true;
   }
 
-  const int base = cols_b / world_size;
-  const int remainder = cols_b % world_size;
-  const int my_start = rank * base + std::min(rank, remainder);
-  const int my_width = base + (rank < remainder ? 1 : 0);
-
-  std::vector<double> a_flat(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(cols_a), 0.0);
-
-  if (rank == 0) {
-    FillAFlatFromMatrixA(GetInput(), a_flat, rows_a, cols_a);
+  int base = cols_b / world_size;
+  int rem = cols_b % world_size;
+  int my_start = rank * base;
+  if (rank < rem) {
+    my_start += rank;
+  } else {
+    my_start += rem;
   }
 
-  MPI_Bcast(a_flat.data(), rows_a * cols_a, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  int my_width = base;
+  if (rank < rem) {
+    my_width += 1;
+  }
 
-  std::vector<double> b_strip;
+  std::vector<double> aflat(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_a), 0.0);
+  std::vector<double> bstrip;
   if (my_width > 0) {
-    b_strip.assign(static_cast<std::size_t>(cols_a) * static_cast<std::size_t>(my_width), 0.0);
+    bstrip.assign(static_cast<size_t>(cols_a) * static_cast<size_t>(my_width), 0.0);
   }
 
   if (rank == 0) {
-    DistributeBStripToProcess(GetInput(), cols_a, cols_b, world_size, b_strip, rank);
+    const auto &in = GetInput();
+    const auto &a = in.first;
+
+    for (int i = 0; i < rows_a; ++i) {
+      for (int j = 0; j < cols_a; ++j) {
+        aflat[(static_cast<size_t>(i) * cols_a) + j] = a[i][j];
+      }
+    }
+  }
+
+  MPI_Bcast(aflat.data(), rows_a * cols_a, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+  if (rank == 0) {
+    const auto &in = GetInput();
+    const auto &b = in.second;
+    DistributeStripes(world_size, b, base, rem, bstrip, rank, cols_a, my_width);
   } else if (my_width > 0) {
-    MPI_Recv(b_strip.data(), cols_a * my_width, MPI_DOUBLE, 0, 101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(bstrip.data(), cols_a * my_width, MPI_DOUBLE, 0, 101, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   }
 
-  std::vector<double> c_strip;
+  std::vector<double> cstrip;
   if (my_width > 0) {
-    c_strip.assign(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(my_width), 0.0);
-    CalculateCStripFromStrips(a_flat, b_strip, c_strip, rows_a, cols_a, my_width);
+    cstrip.assign(static_cast<size_t>(rows_a) * static_cast<size_t>(my_width), 0.0);
+    MultiplyStrip(aflat, bstrip, cstrip, rows_a, cols_a, my_width);
   }
 
   std::vector<double> full_result;
   if (rank == 0) {
-    full_result.assign(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(cols_b), 0.0);
-    GatherResultsFromWorkers(full_result, rows_a, cols_b, world_size, c_strip, my_start, my_width);
-  } else if (my_width > 0) {
-    MPI_Send(c_strip.data(), rows_a * my_width, MPI_DOUBLE, 0, 102, MPI_COMM_WORLD);
-  } else {
-    MPI_Send(nullptr, 0, MPI_DOUBLE, 0, 102, MPI_COMM_WORLD);
+    full_result.assign(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_b), 0.0);
   }
 
+  GatherResults(world_size, rank, rows_a, cols_b, base, rem, cstrip, my_width, my_start, full_result);
+
+  std::vector<double> local_full_result;
+  if (rank != 0) {
+    local_full_result.assign(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_b), 0.0);
+  }
+
+  BroadcastFullResult(rank, world_size, full_result, local_full_result, rows_a, cols_b);
+
+  OutType result(rows_a, std::vector<double>(cols_b, 0.0));
   if (rank == 0) {
-    OutType result(rows_a, std::vector<double>(cols_b, 0.0));
-    FillResultFromFullResult(full_result, result, rows_a, cols_b);
-    GetOutput() = std::move(result);
-    SendResultToWorkers(full_result, rows_a, cols_b, world_size);
+    CreateOutputMatrix(full_result, result, rows_a, cols_b);
   } else {
-    full_result.assign(static_cast<std::size_t>(rows_a) * static_cast<std::size_t>(cols_b), 0.0);
-    ReceiveResultFromMaster(full_result, rows_a, cols_b);
-
-    OutType result(rows_a, std::vector<double>(cols_b, 0.0));
-    FillResultFromFullResult(full_result, result, rows_a, cols_b);
-    GetOutput() = std::move(result);
+    CreateOutputMatrix(local_full_result, result, rows_a, cols_b);
   }
 
+  GetOutput() = std::move(result);
   return true;
 }
 
