@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -21,21 +20,21 @@ class ShkenevImatvectUsingVerticalRibbonFuncTests : public ppc::util::BaseRunFun
  public:
   static std::string PrintTestParam(const TestType &test_param) {
     int test_id = std::get<0>(test_param);
-    const auto &A = std::get<1>(test_param);
-    const auto &B = std::get<2>(test_param);
+    const auto &a = std::get<1>(test_param);
+    const auto &b = std::get<2>(test_param);
 
-    return "test_" + std::to_string(test_id) + "_" + std::to_string(A.size()) + "x" +
-           (A.empty() ? "0" : std::to_string(A[0].size())) + "_" + std::to_string(B.size()) + "x" +
-           (B.empty() ? "0" : std::to_string(B[0].size()));
+    return "test_" + std::to_string(test_id) + "_" + std::to_string(a.size()) + "x" +
+           (a.empty() ? "0" : std::to_string(a[0].size())) + "_" + std::to_string(b.size()) + "x" +
+           (b.empty() ? "0" : std::to_string(b[0].size()));
   }
 
  protected:
   void SetUp() override {
     const auto &params = std::get<static_cast<std::size_t>(ppc::util::GTestParamIndex::kTestParams)>(GetParam());
 
-    const auto &A = std::get<1>(params);
-    const auto &B = std::get<2>(params);
-    input_data_ = std::make_pair(A, B);
+    const auto &a = std::get<1>(params);
+    const auto &b = std::get<2>(params);
+    input_data_ = std::make_pair(a, b);
 
     expected_ = std::get<3>(params);
   }
@@ -72,19 +71,19 @@ class ShkenevImatvectUsingVerticalRibbonFuncTests : public ppc::util::BaseRunFun
 namespace {
 
 TestType CreateMatrixTest(int test_id, int rows_a, int cols_a, int cols_b) {
-  std::vector<std::vector<double>> A(rows_a, std::vector<double>(cols_a));
-  std::vector<std::vector<double>> B(cols_a, std::vector<double>(cols_b));
-  std::vector<std::vector<double>> C(rows_a, std::vector<double>(cols_b, 0.0));
+  std::vector<std::vector<double>> a(rows_a, std::vector<double>(cols_a));
+  std::vector<std::vector<double>> b(cols_a, std::vector<double>(cols_b));
+  std::vector<std::vector<double>> c(rows_a, std::vector<double>(cols_b, 0.0));
 
   for (int i = 0; i < rows_a; ++i) {
     for (int j = 0; j < cols_a; ++j) {
-      A[i][j] = i * cols_a + j + 1;
+      a[i][j] = (i * cols_a) + j + 1;
     }
   }
 
   for (int j = 0; j < cols_a; ++j) {
     for (int k = 0; k < cols_b; ++k) {
-      B[j][k] = j * cols_b + k + 1;
+      b[j][k] = (j * cols_b) + k + 1;
     }
   }
 
@@ -92,13 +91,13 @@ TestType CreateMatrixTest(int test_id, int rows_a, int cols_a, int cols_b) {
     for (int k = 0; k < cols_b; ++k) {
       double sum = 0.0;
       for (int j = 0; j < cols_a; ++j) {
-        sum += A[i][j] * B[j][k];
+        sum += a[i][j] * b[j][k];
       }
-      C[i][k] = sum;
+      c[i][k] = sum;
     }
   }
 
-  return std::make_tuple(test_id, A, B, C);
+  return std::make_tuple(test_id, a, b, c);
 }
 
 const std::array<TestType, 8> kTestParam = {
