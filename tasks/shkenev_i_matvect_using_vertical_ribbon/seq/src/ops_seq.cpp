@@ -1,5 +1,6 @@
 #include "shkenev_i_matvect_using_vertical_ribbon/seq/include/ops_seq.hpp"
 
+#include <cstddef>
 #include <vector>
 
 #include "shkenev_i_matvect_using_vertical_ribbon/common/include/common.hpp"
