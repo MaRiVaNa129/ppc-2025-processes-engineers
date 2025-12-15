@@ -126,7 +126,8 @@ void DistributeStripes(int world_size, const std::vector<std::vector<double>> &b
 
   if (rank == 0) {
     for (int proc = 0; proc < world_size; ++proc) {
-      int proc_start, proc_width;
+      int proc_start = 0;
+      int proc_width = 0;
       GetProcessParams(proc, base, rem, proc_start, proc_width);
 
       if (proc_width <= 0) {
@@ -189,35 +190,49 @@ void ProcessNonEmptyResults(int proc, int rows_a, int cols_b, int proc_start, in
   }
 }
 
-void GatherResults(int world_size, int rank, int rows_a, int cols_b, int base, int rem,
-                   const std::vector<double> &cstrip, int my_width, int my_start, std::vector<double> &full_result) {
+void GatherResultsInRoot(int world_size, int rows_a, int cols_b, int base, int rem, int my_width, int my_start,
+                         const std::vector<double> &cstrip, std::vector<double> &full_result) {
   const int tag_c = 102;
 
-  if (rank == 0) {
-    if (my_width > 0) {
-      for (int i = 0; i < rows_a; ++i) {
-        for (int k = 0; k < my_width; ++k) {
-          int global_k = my_start + k;
-          full_result[(static_cast<size_t>(i) * cols_b) + global_k] = cstrip[(static_cast<size_t>(i) * my_width) + k];
-        }
+  if (my_width > 0) {
+    for (int i = 0; i < rows_a; ++i) {
+      for (int k = 0; k < my_width; ++k) {
+        int global_k = my_start + k;
+        full_result[(static_cast<size_t>(i) * cols_b) + global_k] = cstrip[(static_cast<size_t>(i) * my_width) + k];
       }
     }
+  }
 
-    for (int proc = 1; proc < world_size; ++proc) {
-      int proc_start, proc_width;
-      GetProcessParams(proc, base, rem, proc_start, proc_width);
+  for (int proc = 1; proc < world_size; ++proc) {
+    int proc_start = 0;
+    int proc_width = 0;
+    GetProcessParams(proc, base, rem, proc_start, proc_width);
 
-      if (proc_width <= 0) {
-        HandleEmptyResults(proc, tag_c);
-        continue;
-      }
-
-      ProcessNonEmptyResults(proc, rows_a, cols_b, proc_start, proc_width, full_result);
+    if (proc_width <= 0) {
+      HandleEmptyResults(proc, tag_c);
+      continue;
     }
-  } else if (my_width > 0) {
-    MPI_Send(cstrip.data(), rows_a * my_width, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
+
+    ProcessNonEmptyResults(proc, rows_a, cols_b, proc_start, proc_width, full_result);
+  }
+}
+
+void GatherResultsInNonRoot(int my_width, const std::vector<double> &cstrip) {
+  const int tag_c = 102;
+
+  if (my_width > 0) {
+    MPI_Send(cstrip.data(), cstrip.size(), MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
   } else {
     MPI_Send(nullptr, 0, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
+  }
+}
+
+void GatherResults(int world_size, int rank, int rows_a, int cols_b, int base, int rem,
+                   const std::vector<double> &cstrip, int my_width, int my_start, std::vector<double> &full_result) {
+  if (rank == 0) {
+    GatherResultsInRoot(world_size, rows_a, cols_b, base, rem, my_width, my_start, cstrip, full_result);
+  } else {
+    GatherResultsInNonRoot(my_width, cstrip);
   }
 }
 
@@ -408,7 +423,8 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
 
   int base = cols_b / world_size;
   int rem = cols_b % world_size;
-  int my_start, my_width;
+  int my_start = 0;
+  int my_width = 0;
   CalculateStripParameters(rank, base, rem, my_start, my_width);
 
   std::vector<double> aflat(static_cast<size_t>(rows_a) * static_cast<size_t>(cols_a), 0.0);
