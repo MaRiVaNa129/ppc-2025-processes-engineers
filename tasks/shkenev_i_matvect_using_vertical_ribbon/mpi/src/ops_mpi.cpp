@@ -217,11 +217,11 @@ void GatherResultsInRoot(int world_size, int rows_a, int cols_b, int base, int r
   }
 }
 
-void GatherResultsInNonRoot(int my_width, const std::vector<double> &cstrip) {
+void GatherResultsInNonRoot(int my_width, const std::vector<double> &cstrip, int rows_a) {
   const int tag_c = 102;
 
   if (my_width > 0) {
-    MPI_Send(cstrip.data(), cstrip.size(), MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
+    MPI_Send(cstrip.data(), rows_a * my_width, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
   } else {
     MPI_Send(nullptr, 0, MPI_DOUBLE, 0, tag_c, MPI_COMM_WORLD);
   }
@@ -232,7 +232,7 @@ void GatherResults(int world_size, int rank, int rows_a, int cols_b, int base, i
   if (rank == 0) {
     GatherResultsInRoot(world_size, rows_a, cols_b, base, rem, my_width, my_start, cstrip, full_result);
   } else {
-    GatherResultsInNonRoot(my_width, cstrip);
+    GatherResultsInNonRoot(my_width, cstrip, rows_a);
   }
 }
 
