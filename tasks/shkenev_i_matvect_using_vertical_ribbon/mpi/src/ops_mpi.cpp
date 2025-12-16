@@ -11,7 +11,8 @@ namespace shkenev_i_matvect_using_vertical_ribbon {
 
 ShkenevImatvectUsingVerticalRibbonMPI::ShkenevImatvectUsingVerticalRibbonMPI(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
-  GetInput() = in;
+  InType temp = in;
+  GetInput().swap(temp);
   GetOutput() = OutType{};
 }
 
