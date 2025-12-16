@@ -121,8 +121,11 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
   int cols = 0;
 
   if (rank == 0) {
-    rows = static_cast<int>(GetInput().first.size());
-    cols = static_cast<int>(GetInput().first[0].size());
+    const std::size_t rows_size = GetInput().first.size();
+    const std::size_t cols_size = GetInput().first[0].size();
+
+    rows = static_cast<int>(rows_size);
+    cols = static_cast<int>(cols_size);
   }
 
   BroadcastMatrixSize(rows, cols);
@@ -131,63 +134,76 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
     return false;
   }
 
-  std::vector<int> local_cols_vec(world_size, cols / world_size);
-  int remainder = cols % world_size;
-  for (int i = 0; i < remainder; ++i) {
-    local_cols_vec[i]++;
-  }
+  if (cols < world_size) {
+    if (rank == 0) {
+      const auto &matrix = GetInput().first;
+      const auto &vector = GetInput().second;
 
-  std::vector<int> displs(world_size, 0);
-  for (int i = 1; i < world_size; ++i) {
-    displs[i] = displs[i - 1] + local_cols_vec[i - 1];
-  }
+      std::vector<double> result(rows, 0.0);
 
-  int local_cols = local_cols_vec[rank];
-  int col_offset = displs[rank];
-
-  std::vector<double> local_matrix(static_cast<size_t>(rows) * local_cols);
-
-  if (rank == 0) {
-    std::vector<double> flat_matrix(rows * cols);
-    for (int r = 0; r < rows; ++r) {
-      for (int c = 0; c < cols; ++c) {
-        flat_matrix[r * cols + c] = GetInput().first[r][c];
+      for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+          result[i] = result[i] + matrix[i][j] * vector[j];
+        }
       }
+
+      GetOutput() = result;
     }
 
-    std::vector<int> sendcounts(world_size);
-    for (int i = 0; i < world_size; ++i) {
-      sendcounts[i] = rows * local_cols_vec[i];
+    if (rank != 0) {
+      GetOutput().resize(static_cast<std::size_t>(rows), 0.0);
     }
 
-    std::vector<int> senddispls(world_size);
-    senddispls[0] = 0;
-    for (int i = 1; i < world_size; ++i) {
-      senddispls[i] = senddispls[i - 1] + sendcounts[i - 1];
-    }
-
-    MPI_Scatterv(flat_matrix.data(), sendcounts.data(), senddispls.data(), MPI_DOUBLE, local_matrix.data(),
-                 rows * local_cols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  } else {
-    MPI_Scatterv(nullptr, nullptr, nullptr, MPI_DOUBLE, local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0,
-                 MPI_COMM_WORLD);
+    MPI_Bcast(GetOutput().data(), rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    return true;
   }
 
-  std::vector<double> local_vector(local_cols);
-  if (rank == 0) {
-    for (int i = 0; i < local_cols; ++i) {
-      local_vector[i] = GetInput().second[col_offset + i];
-    }
-  }
-  MPI_Bcast(local_vector.data(), local_cols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  int local_cols = 0;
+  int col_offset = 0;
 
+  ComputeColumnDistribution(rank, world_size, cols, local_cols, col_offset);
+
+  std::vector<double> local_matrix(static_cast<std::size_t>(rows) * local_cols, 0.0);
+  std::vector<double> local_vector(local_cols, 0.0);
   std::vector<double> local_result(rows, 0.0);
+
+  if (rank == 0) {
+    ScatterMatrixColumns(GetInput().first, local_matrix, rows, local_cols, col_offset);
+    ScatterVectorPart(GetInput().second, local_vector, local_cols, col_offset);
+
+    auto SendColumnsToOtherProcesses = [&](int world_size, int rows, int cols) {
+      for (int proc = 1; proc < world_size; ++proc) {
+        int proc_cols = 0;
+        int proc_offset = 0;
+        ComputeColumnDistribution(proc, world_size, cols, proc_cols, proc_offset);
+
+        std::vector<double> temp_matrix(rows * proc_cols, 0.0);
+        std::vector<double> temp_vector(proc_cols, 0.0);
+
+        ScatterMatrixColumns(GetInput().first, temp_matrix, rows, proc_cols, proc_offset);
+        ScatterVectorPart(GetInput().second, temp_vector, proc_cols, proc_offset);
+
+        MPI_Send(temp_matrix.data(), rows * proc_cols, MPI_DOUBLE, proc, 0, MPI_COMM_WORLD);
+        MPI_Send(temp_vector.data(), proc_cols, MPI_DOUBLE, proc, 1, MPI_COMM_WORLD);
+      }
+    };
+
+    SendColumnsToOtherProcesses(world_size, rows, cols);
+  } else {
+    MPI_Status status;
+    MPI_Recv(local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+    MPI_Recv(local_vector.data(), local_cols, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, &status);
+  }
+
   ComputeLocalProduct(local_matrix, local_vector, local_result, rows, local_cols);
 
-  std::vector<double> result(rows, 0.0);
-  MPI_Allreduce(local_result.data(), result.data(), rows, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  std::vector<double> result(static_cast<std::size_t>(rows), 0.0);
+
+  MPI_Reduce(local_result.data(), rank == 0 ? result.data() : nullptr, rows, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Bcast(result.data(), rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   GetOutput() = result;
+
   return true;
 }
 
