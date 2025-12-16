@@ -27,16 +27,11 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::ValidationImpl() {
   const auto &matrix = input.first;
   const auto &vector = input.second;
 
-  if (matrix.empty()) {
-    return false;
-  }
-
-  if (vector.empty()) {
+  if (matrix.empty() || vector.empty()) {
     return false;
   }
 
   std::size_t cols = matrix[0].size();
-
   for (const auto &row : matrix) {
     if (row.size() != cols) {
       return false;
@@ -67,16 +62,16 @@ void ComputeColumnDistribution(int rank, int world_size, int total_cols, int &lo
 
   local_cols = base;
   if (rank < remainder) {
-    local_cols = local_cols + 1;
+    local_cols += 1;
   }
 
   col_offset = 0;
   for (int i = 0; i < rank; ++i) {
     int cols = base;
     if (i < remainder) {
-      cols = cols + 1;
+      cols += 1;
     }
-    col_offset = col_offset + cols;
+    col_offset += cols;
   }
 }
 
@@ -102,7 +97,7 @@ void ComputeLocalProduct(const std::vector<double> &local_matrix, const std::vec
   for (int row = 0; row < rows; ++row) {
     double sum = 0.0;
     for (int col = 0; col < local_cols; ++col) {
-      sum = sum + local_matrix[row * local_cols + col] * local_vector[col];
+      sum += local_matrix[row * local_cols + col] * local_vector[col];
     }
     local_result[row] = sum;
   }
@@ -111,21 +106,15 @@ void ComputeLocalProduct(const std::vector<double> &local_matrix, const std::vec
 }  // namespace
 
 bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
-  int world_size = 0;
-  int rank = 0;
-
+  int world_size = 0, rank = 0;
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  int rows = 0;
-  int cols = 0;
+  int rows = 0, cols = 0;
 
   if (rank == 0) {
-    const std::size_t rows_size = GetInput().first.size();
-    const std::size_t cols_size = GetInput().first[0].size();
-
-    rows = static_cast<int>(rows_size);
-    cols = static_cast<int>(cols_size);
+    rows = static_cast<int>(GetInput().first.size());
+    cols = static_cast<int>(GetInput().first[0].size());
   }
 
   BroadcastMatrixSize(rows, cols);
@@ -135,32 +124,29 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
   }
 
   if (cols < world_size) {
+    std::vector<double> result(rows, 0.0);
+
     if (rank == 0) {
       const auto &matrix = GetInput().first;
       const auto &vector = GetInput().second;
 
-      std::vector<double> result(rows, 0.0);
-
       for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
-          result[i] = result[i] + matrix[i][j] * vector[j];
+          result[i] += matrix[i][j] * vector[j];
         }
       }
 
       GetOutput() = result;
-    }
-
-    if (rank != 0) {
+    } else {
       GetOutput().resize(static_cast<std::size_t>(rows), 0.0);
     }
 
-    MPI_Bcast(GetOutput().data(), rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    double *output_ptr = rows > 0 ? GetOutput().data() : nullptr;
+    MPI_Bcast(output_ptr, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     return true;
   }
 
-  int local_cols = 0;
-  int col_offset = 0;
-
+  int local_cols = 0, col_offset = 0;
   ComputeColumnDistribution(rank, world_size, cols, local_cols, col_offset);
 
   std::vector<double> local_matrix(static_cast<std::size_t>(rows) * local_cols, 0.0);
@@ -171,39 +157,39 @@ bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
     ScatterMatrixColumns(GetInput().first, local_matrix, rows, local_cols, col_offset);
     ScatterVectorPart(GetInput().second, local_vector, local_cols, col_offset);
 
-    auto SendColumnsToOtherProcesses = [&](int world_size, int rows, int cols) {
-      for (int proc = 1; proc < world_size; ++proc) {
-        int proc_cols = 0;
-        int proc_offset = 0;
-        ComputeColumnDistribution(proc, world_size, cols, proc_cols, proc_offset);
+    for (int proc = 1; proc < world_size; ++proc) {
+      int proc_cols = 0, proc_offset = 0;
+      ComputeColumnDistribution(proc, world_size, cols, proc_cols, proc_offset);
 
-        std::vector<double> temp_matrix(rows * proc_cols, 0.0);
-        std::vector<double> temp_vector(proc_cols, 0.0);
-
-        ScatterMatrixColumns(GetInput().first, temp_matrix, rows, proc_cols, proc_offset);
-        ScatterVectorPart(GetInput().second, temp_vector, proc_cols, proc_offset);
-
-        MPI_Send(temp_matrix.data(), rows * proc_cols, MPI_DOUBLE, proc, 0, MPI_COMM_WORLD);
-        MPI_Send(temp_vector.data(), proc_cols, MPI_DOUBLE, proc, 1, MPI_COMM_WORLD);
+      if (proc_cols == 0) {
+        continue;
       }
-    };
 
-    SendColumnsToOtherProcesses(world_size, rows, cols);
+      std::vector<double> temp_matrix(rows * proc_cols, 0.0);
+      std::vector<double> temp_vector(proc_cols, 0.0);
+
+      ScatterMatrixColumns(GetInput().first, temp_matrix, rows, proc_cols, proc_offset);
+      ScatterVectorPart(GetInput().second, temp_vector, proc_cols, proc_offset);
+
+      MPI_Send(temp_matrix.data(), rows * proc_cols, MPI_DOUBLE, proc, 0, MPI_COMM_WORLD);
+      MPI_Send(temp_vector.data(), proc_cols, MPI_DOUBLE, proc, 1, MPI_COMM_WORLD);
+    }
   } else {
-    MPI_Status status;
-    MPI_Recv(local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
-    MPI_Recv(local_vector.data(), local_cols, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, &status);
+    if (local_cols > 0) {
+      MPI_Status status;
+      MPI_Recv(local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+      MPI_Recv(local_vector.data(), local_cols, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, &status);
+    }
   }
 
   ComputeLocalProduct(local_matrix, local_vector, local_result, rows, local_cols);
 
   std::vector<double> result(static_cast<std::size_t>(rows), 0.0);
-
-  MPI_Reduce(local_result.data(), rank == 0 ? result.data() : nullptr, rows, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-  MPI_Bcast(result.data(), rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  double *result_ptr = rows > 0 ? result.data() : nullptr;
+  MPI_Reduce(local_result.data(), rank == 0 ? result_ptr : nullptr, rows, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Bcast(result_ptr, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   GetOutput() = result;
-
   return true;
 }
 
