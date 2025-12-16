@@ -13,12 +13,12 @@ namespace shkenev_i_matvect_using_vertical_ribbon {
 
 class ShkenevImatvectUsingVerticalRibbonPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  public:
-  static constexpr size_t kSize = 1000;
+  static constexpr size_t kSize = 11000;
 
  protected:
   void SetUp() override {
     matrix_a_ = std::vector<std::vector<double>>(kSize, std::vector<double>(kSize));
-    matrix_b_ = std::vector<std::vector<double>>(kSize, std::vector<double>(kSize));
+    vector_b_ = std::vector<double>(kSize);
 
     for (size_t i = 0; i < kSize; ++i) {
       for (size_t j = 0; j < kSize; ++j) {
@@ -27,22 +27,22 @@ class ShkenevImatvectUsingVerticalRibbonPerfTests : public ppc::util::BaseRunPer
         } else {
           matrix_a_[i][j] = 0.0;
         }
-        matrix_b_[i][j] = static_cast<double>(i + j) * 0.002;
       }
+      vector_b_[i] = static_cast<double>(i) * 0.002;
     }
   }
 
   bool CheckTestOutputData(OutType &output_data) final {
-    return !output_data.empty();
+    return !output_data.empty() && output_data.size() == kSize;
   }
 
   InType GetTestInputData() final {
-    return std::make_pair(matrix_a_, matrix_b_);
+    return std::make_pair(matrix_a_, vector_b_);
   }
 
  private:
   std::vector<std::vector<double>> matrix_a_;
-  std::vector<std::vector<double>> matrix_b_;
+  std::vector<double> vector_b_;
 };
 
 TEST_P(ShkenevImatvectUsingVerticalRibbonPerfTests, RunPerfModes) {
