@@ -9,7 +9,8 @@ namespace shkenev_i_matvect_using_vertical_ribbon {
 
 ShkenevImatvectUsingVerticalRibbonSEQ::ShkenevImatvectUsingVerticalRibbonSEQ(const InType &in) {
   SetTypeOfTask(GetStaticTypeOfTask());
-  GetInput() = in;
+  InType temp_input = in;
+  GetInput().swap(temp_input);
   GetOutput() = OutType{};
 }
 
