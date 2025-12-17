@@ -42,7 +42,7 @@
 3. Для i от 0 до m-1:
      Для j от 0 до n-1:
          Для k от 0 до p-1:
-             C[i][k] += A[i][j] * B[j][k]
+             C[i] += A[i][j] * B[j]
 4. Вернуть C
 ```
 
@@ -65,9 +65,35 @@ local_cols[i] = base_cols + (i < remainder ? 1 : 0)
 offset[i] = сумма столбцов предыдущих процессов
 ```
 
+### Коммуникационная схема
+
+**Распределение данных (от процесса 0 к остальным):**
+```
+Процесс 0:
+  1. Вычисляет распределение столбцов для каждого процесса
+  2. Для каждого процесса i > 0:
+     - Готовит локальную матрицу A_i (rows × local_cols[i])
+     - Готовит локальный вектор B_i (local_cols[i] элементов)
+     - Отправляет через MPI_Send:
+        * Матрицу с тегом 0
+        * Вектор с тегом 1
+  
+Процессы i > 0:
+  1. Получают данные через MPI_Recv:
+     - Локальную матрицу с тегом 0
+     - Локальный вектор с тегом 1
+```
+
+**Сбор результатов:**
+```
+1. Каждый процесс вычисляет локальный результат
+2. MPI_Reduce суммирует все локальные результаты в процессе 0
+3. MPI_Bcast рассылает финальный результат всем процессам
+```
+
 ### Локальные вычисления
 
-**Каждый процесс вычисляет свой локальный результат::**
+**Каждый процесс вычисляет свой локальный результат:**
 ```
 for row in 0..m-1:
     for col in 0..local_cols-1:
@@ -76,15 +102,8 @@ for row in 0..m-1:
 
 ### Обработка особых случаев
 
-- Если число столбцов < число процессов, все процессы выполняют полное умножение последовательно.
-- Процессы с нулевой шириной полосы пропускают вычисления.
-
-### Сбор результатов
-
-Для сбора используется:
-
-- Используется MPI_Reduce для суммирования локальных результатов.
-- Полный результат рассылается всем процессам через MPI_Bcast.
+- Случай cols < world_size: Все процессы используют полную матрицу (вычисляет процесс 0, результат рассылается)
+- Процессы с local_cols = 0: Пропускают вычисления и коммуникации
 
 
 ## 5. Детали реализации
@@ -111,9 +130,13 @@ for row in 0..m-1:
 **Вспомогательные функции MPI:**
 - `BroadcastMatrixSize` - рассылка размеров матриц
 - `ComputeColumnDistribution` - вычисление количества столбцов на процесс
-- `ScatterMatrixColumns` - распределение данных
-- `ScatterVectorPart` - распределение данных
+- `ScatterMatrixColumns` - распределение данных, но отправка происходит через MPI_Send
+- `ScatterVectorPart` - распределение данных, но отправка происходит через MPI_Send
 - `ComputeLocalProduct` - локальные вычисления
+- `HandleSmallMatrixCase` - обработка случая cols < world_size
+- `SendDataToProcesses` - отправка данных от процесса 0
+- `ReceiveDataFromProcess0` - получение данных другими процессами
+- `GatherAndBroadcastResults` - сбор и рассылка результатов
 
 ## 6. Экспериментальная установка
 
@@ -201,7 +224,6 @@ for row in 0..m-1:
 
 3. **Особенности вертикальной декомпозиции:** 
 - Хорошее масштабирование на малом числе процессов (2-3)
-- При 8 процессах эффективность сильно падает (≈20%) из-за высоких коммуникационных накладных расходов
 
 **Вывод:**
 
@@ -271,74 +293,55 @@ bool ShkenevImatvectUsingVerticalRibbonSEQ::RunImpl() {
 
 ```cpp
 bool ShkenevImatvectUsingVerticalRibbonMPI::RunImpl() {
-    int world_size = 0;
-    int rank = 0;
+  int world_size = 0;
+  int rank = 0;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  int rows = 0;
+  int cols = 0;
 
-    int rows = 0;
-    int cols = 0;
+  if (rank == 0) {
+    rows = static_cast<int>(GetInput().first.size());
+    cols = static_cast<int>(GetInput().first[0].size());
+  }
 
-    if (rank == 0) {
-        rows = static_cast<int>(GetInput().first.size());
-        cols = static_cast<int>(GetInput().first[0].size());
-    }
+  BroadcastMatrixSize(rows, cols);
 
-    BroadcastMatrixSize(rows, cols);
+  if ((rows == 0) || (cols == 0)) {
+    return false;
+  }
 
-    if (rows == 0 || cols == 0) {
-        return false;
-    }
+  if (cols < world_size) {
+    return HandleSmallMatrixCase(rank, rows, cols);
+  }
 
-    std::vector<int> local_cols_vec(world_size, cols / world_size);
-    int remainder = cols % world_size;
-    for (int i = 0; i < remainder; ++i) local_cols_vec[i]++;
+  int local_cols = 0;
+  int col_offset = 0;
+  ComputeColumnDistribution(rank, world_size, cols, local_cols, col_offset);
 
-    std::vector<int> displs(world_size, 0);
-    for (int i = 1; i < world_size; ++i)
-        displs[i] = displs[i - 1] + local_cols_vec[i - 1];
+  std::vector<double> local_matrix(static_cast<std::size_t>(rows) * static_cast<std::size_t>(local_cols), 0.0);
+  std::vector<double> local_vector(static_cast<std::size_t>(local_cols), 0.0);
+  std::vector<double> local_result(static_cast<std::size_t>(rows), 0.0);
 
-    int local_cols = local_cols_vec[rank];
-    int col_offset = displs[rank];
+  if (rank == 0) {
+    ScatterMatrixColumns(GetInput().first, local_matrix, rows, local_cols, col_offset);
+    ScatterVectorPart(GetInput().second, local_vector, local_cols, col_offset);
+    SendDataToProcesses(world_size, rows, cols);
+  } else {
+    ReceiveDataFromProcess0(rows, local_cols, local_matrix, local_vector);
+  }
 
-    std::vector<double> local_matrix(static_cast<size_t>(rows) * local_cols);
+  ComputeLocalProduct(local_matrix, local_vector, local_result, rows, local_cols);
 
-    if (rank == 0) {
-        std::vector<double> flat_matrix(rows * cols);
-        for (int r = 0; r < rows; ++r)
-            for (int c = 0; c < cols; ++c)
-                flat_matrix[r * cols + c] = GetInput().first[r][c];
+  std::vector<double> result(static_cast<std::size_t>(rows), 0.0);
+  GatherAndBroadcastResults(rank, rows, local_result, result);
 
-        std::vector<int> sendcounts(world_size);
-        for (int i = 0; i < world_size; ++i) sendcounts[i] = rows * local_cols_vec[i];
+  GetOutput() = result;
+  return true;
+}
 
-        std::vector<int> senddispls(world_size);
-        senddispls[0] = 0;
-        for (int i = 1; i < world_size; ++i)
-            senddispls[i] = senddispls[i - 1] + sendcounts[i - 1];
-
-        MPI_Scatterv(flat_matrix.data(), sendcounts.data(), senddispls.data(), MPI_DOUBLE,
-                     local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    } else {
-        MPI_Scatterv(nullptr, nullptr, nullptr, MPI_DOUBLE,
-                     local_matrix.data(), rows * local_cols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    }
-
-    std::vector<double> local_vector(local_cols);
-    if (rank == 0) {
-        for (int i = 0; i < local_cols; ++i)
-            local_vector[i] = GetInput().second[col_offset + i];
-    }
-    MPI_Bcast(local_vector.data(), local_cols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-    std::vector<double> local_result(rows, 0.0);
-    ComputeLocalProduct(local_matrix, local_vector, local_result, rows, local_cols);
-
-    std::vector<double> result(rows, 0.0);
-    MPI_Allreduce(local_result.data(), result.data(), rows, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-    GetOutput() = result;
-    return true;
+bool ShkenevImatvectUsingVerticalRibbonMPI::PostProcessingImpl() {
+  return true;
 }
 ```
