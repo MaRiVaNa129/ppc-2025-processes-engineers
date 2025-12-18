@@ -55,10 +55,6 @@ bool ShkenevImatvectUsingVerticalRibbonSEQ::RunImpl() {
 
   for (std::size_t i = 0; i < rows_a; i++) {
     for (std::size_t j = 0; j < cols_a; j++) {
-      if (matrix_a[i][j] == 0.0) {
-        continue;
-      }
-
       result_vector[i] += matrix_a[i][j] * vector_b[j];
     }
   }

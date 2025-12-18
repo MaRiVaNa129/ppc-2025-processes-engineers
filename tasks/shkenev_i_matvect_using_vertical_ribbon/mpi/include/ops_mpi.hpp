@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include "shkenev_i_matvect_using_vertical_ribbon/common/include/common.hpp"
 #include "task/include/task.hpp"
 
