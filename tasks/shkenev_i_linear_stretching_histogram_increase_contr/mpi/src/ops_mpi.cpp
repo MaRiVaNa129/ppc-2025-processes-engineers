@@ -4,10 +4,10 @@
 
 #include <algorithm>
 #include <climits>
+#include <utility>
 #include <vector>
 
 #include "shkenev_i_linear_stretching_histogram_increase_contr/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace shkenev_i_linear_stretching_histogram_increase_contr {
 
@@ -26,12 +26,8 @@ bool ShkenevIlinerStretchingHistIncreaseContrMPI::ValidationImpl() {
     if (GetInput().empty()) {
       is_valid = 0;
     } else {
-      for (int val : GetInput()) {
-        if (val < 0 || val > 255) {
-          is_valid = 0;
-          break;
-        }
-      }
+      is_valid =
+          std::all_of(GetInput().begin(), GetInput().end(), [](int val) { return val >= 0 && val <= 255; }) ? 1 : 0;
     }
   }
 
@@ -72,7 +68,8 @@ std::pair<int, int> FindLocalMinMax(const std::vector<int> &data) {
     return {INT_MAX, INT_MIN};
   }
 
-  auto [min_it, max_it] = std::minmax_element(data.begin(), data.end());
+  auto min_it = std::min_element(data.begin(), data.end());
+  auto max_it = std::max_element(data.begin(), data.end());
   return {*min_it, *max_it};
 }
 

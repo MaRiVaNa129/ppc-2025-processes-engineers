@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "shkenev_i_linear_stretching_histogram_increase_contr/common/include/common.hpp"
-#include "util/include/util.hpp"
 
 namespace shkenev_i_linear_stretching_histogram_increase_contr {
 
@@ -19,13 +18,7 @@ bool ShkenevIlinerStretchingHistIncreaseContrSEQ::ValidationImpl() {
     return false;
   }
 
-  for (int val : GetInput()) {
-    if (val < 0 || val > 255) {
-      return false;
-    }
-  }
-
-  return true;
+  return std::all_of(GetInput().begin(), GetInput().end(), [](int val) { return val >= 0 && val <= 255; });
 }
 
 bool ShkenevIlinerStretchingHistIncreaseContrSEQ::PreProcessingImpl() {
