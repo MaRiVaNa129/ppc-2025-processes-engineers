@@ -1,6 +1,7 @@
 #include "shkenev_i_linear_stretching_histogram_increase_contr/seq/include/ops_seq.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include "shkenev_i_linear_stretching_histogram_increase_contr/common/include/common.hpp"
@@ -33,11 +34,17 @@ bool ShkenevIlinerStretchingHistIncreaseContrSEQ::PreProcessingImpl() {
 }
 
 bool ShkenevIlinerStretchingHistIncreaseContrSEQ::RunImpl() {
-  auto &input = GetInput();
+  const auto &input = GetInput();
   auto &output = GetOutput();
 
-  int min_val = *std::min_element(input.begin(), input.end());
-  int max_val = *std::max_element(input.begin(), input.end());
+  if (input.empty()) {
+    output.clear();
+    return true;
+  }
+
+  auto [min_it, max_it] = std::minmax_element(input.begin(), input.end());
+  int min_val = *min_it;
+  int max_val = *max_it;
 
   if (max_val > min_val) {
     int range = max_val - min_val;

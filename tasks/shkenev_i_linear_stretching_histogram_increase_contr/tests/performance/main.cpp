@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <random>
-#include <utility>
 #include <vector>
 
 #include "shkenev_i_linear_stretching_histogram_increase_contr/common/include/common.hpp"

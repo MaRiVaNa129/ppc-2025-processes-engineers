@@ -17,7 +17,7 @@ ShkenevIlinerStretchingHistIncreaseContrMPI::ShkenevIlinerStretchingHistIncrease
 }
 
 bool ShkenevIlinerStretchingHistIncreaseContrMPI::ValidationImpl() {
-  int rank;
+  int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   int is_valid = 1;
@@ -43,12 +43,62 @@ bool ShkenevIlinerStretchingHistIncreaseContrMPI::PreProcessingImpl() {
   return true;
 }
 
+namespace {
+std::pair<std::vector<int>, std::vector<int>> CalculateDistribution(int total_size, int num_processes) {
+  std::vector<int> send_counts(num_processes);
+  std::vector<int> displs(num_processes);
+
+  const int base_chunk = total_size / num_processes;
+  const int remainder = total_size % num_processes;
+
+  for (int i = 0; i < num_processes; ++i) {
+    send_counts[i] = base_chunk;
+    if (i < remainder) {
+      send_counts[i] += 1;
+    }
+
+    if (i == 0) {
+      displs[i] = 0;
+    } else {
+      displs[i] = displs[i - 1] + send_counts[i - 1];
+    }
+  }
+
+  return {send_counts, displs};
+}
+
+std::pair<int, int> FindLocalMinMax(const std::vector<int> &data) {
+  if (data.empty()) {
+    return {INT_MAX, INT_MIN};
+  }
+
+  auto [min_it, max_it] = std::minmax_element(data.begin(), data.end());
+  return {*min_it, *max_it};
+}
+
+void ApplyLinearStretching(std::vector<int> &data, int global_min, int global_max) {
+  if (global_max <= global_min || data.empty()) {
+    return;
+  }
+
+  const int range = global_max - global_min;
+  for (auto &pixel : data) {
+    pixel = (pixel - global_min) * 255 / range;
+  }
+}
+
+}  // namespace
+
 bool ShkenevIlinerStretchingHistIncreaseContrMPI::RunImpl() {
-  int rank, size;
+  int rank = 0;
+  int size = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  int total_size = (rank == 0) ? static_cast<int>(GetInput().size()) : 0;
+  int total_size = 0;
+  if (rank == 0) {
+    total_size = static_cast<int>(GetInput().size());
+  }
   MPI_Bcast(&total_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   if (total_size == 0) {
@@ -58,18 +108,9 @@ bool ShkenevIlinerStretchingHistIncreaseContrMPI::RunImpl() {
     return true;
   }
 
-  std::vector<int> send_counts(size);
-  std::vector<int> displs(size);
-  int base_chunk = total_size / size;
-  int remainder = total_size % size;
-
-  for (int i = 0; i < size; ++i) {
-    send_counts[i] = base_chunk + (i < remainder ? 1 : 0);
-    displs[i] = (i == 0) ? 0 : displs[i - 1] + send_counts[i - 1];
-  }
+  auto [send_counts, displs] = CalculateDistribution(total_size, size);
 
   std::vector<int> local_data(send_counts[rank]);
-
   if (rank == 0) {
     MPI_Scatterv(GetInput().data(), send_counts.data(), displs.data(), MPI_INT, local_data.data(), send_counts[rank],
                  MPI_INT, 0, MPI_COMM_WORLD);
@@ -78,25 +119,14 @@ bool ShkenevIlinerStretchingHistIncreaseContrMPI::RunImpl() {
                  MPI_COMM_WORLD);
   }
 
-  int local_min = INT_MAX;
-  int local_max = INT_MIN;
+  auto [local_min, local_max] = FindLocalMinMax(local_data);
 
-  if (!local_data.empty()) {
-    auto [mi, ma] = std::minmax_element(local_data.begin(), local_data.end());
-    local_min = *mi;
-    local_max = *ma;
-  }
-
-  int global_min, global_max;
+  int global_min = INT_MAX;
+  int global_max = INT_MIN;
   MPI_Allreduce(&local_min, &global_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
   MPI_Allreduce(&local_max, &global_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-  if (global_max > global_min) {
-    int range = global_max - global_min;
-    for (auto &pixel : local_data) {
-      pixel = (pixel - global_min) * 255 / range;
-    }
-  }
+  ApplyLinearStretching(local_data, global_min, global_max);
 
   if (rank == 0) {
     GetOutput().resize(total_size);
