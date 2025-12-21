@@ -40,7 +40,7 @@ class ShkenevIlinerStretchingHistIncreaseContrPerfTests : public ppc::util::Base
       return false;
     }
 
-    return std::all_of(output_data.begin(), output_data.end(), [](int val) { return val >= 0 && val <= 255; });
+    return std::ranges::all_of(output_data, [](int val) { return val >= 0 && val <= 255; });
   }
 
   InType GetTestInputData() final {

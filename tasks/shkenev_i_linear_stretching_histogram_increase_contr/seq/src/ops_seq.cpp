@@ -35,7 +35,8 @@ bool ShkenevIlinerStretchingHistIncreaseContrSEQ::RunImpl() {
     return true;
   }
 
-  auto [min_it, max_it] = std::minmax_element(input.begin(), input.end());
+  auto min_it = std::ranges::min_element(input);
+  auto max_it = std::ranges::max_element(input);
   int min_val = *min_it;
   int max_val = *max_it;
 

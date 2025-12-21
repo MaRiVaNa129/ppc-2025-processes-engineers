@@ -68,8 +68,8 @@ std::pair<int, int> FindLocalMinMax(const std::vector<int> &data) {
     return {INT_MAX, INT_MIN};
   }
 
-  auto min_it = std::min_element(data.begin(), data.end());
-  auto max_it = std::max_element(data.begin(), data.end());
+  auto min_it = std::ranges::min_element(data);
+  auto max_it = std::ranges::max_element(data);
   return {*min_it, *max_it};
 }
 
