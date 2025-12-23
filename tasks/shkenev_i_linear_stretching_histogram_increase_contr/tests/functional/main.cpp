@@ -82,7 +82,7 @@ TestType CreateStretchingTest(int test_id, int size, int min_v, int max_v, int m
   return std::make_tuple(test_id, in, out);
 }
 
-const std::array<TestType, 10> kTestParam = {
+const std::array<TestType, 11> kTestParam = {
     std::make_tuple(1, std::vector<int>{100, 150, 200}, std::vector<int>{0, 127, 255}),
     CreateStretchingTest(2, 1000, 50, 200, 100),
 
@@ -98,7 +98,9 @@ const std::array<TestType, 10> kTestParam = {
 
     std::make_tuple(9, std::vector<int>{1, 2, 254}, std::vector<int>{0, 1, 255}),
 
-    CreateStretchingTest(10, 5000, 10, 240, 120)};
+    CreateStretchingTest(10, 5000, 10, 240, 120),
+
+    std::make_tuple(11, std::vector<int>{}, std::vector<int>{})};
 
 TEST_P(ShkenevIlinerStretchingHistIncreaseContrFuncTests, LinearStretching) {
   ExecuteTest(GetParam());

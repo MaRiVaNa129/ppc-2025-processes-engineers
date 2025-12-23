@@ -23,9 +23,7 @@ bool ShkenevIlinerStretchingHistIncreaseContrMPI::ValidationImpl() {
   int is_valid = 1;
 
   if (rank == 0) {
-    if (GetInput().empty()) {
-      is_valid = 0;
-    } else {
+    if (!GetInput().empty()) {
       is_valid =
           std::all_of(GetInput().begin(), GetInput().end(), [](int val) { return val >= 0 && val <= 255; }) ? 1 : 0;
     }

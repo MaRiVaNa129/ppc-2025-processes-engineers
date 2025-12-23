@@ -15,7 +15,7 @@ ShkenevIlinerStretchingHistIncreaseContrSEQ::ShkenevIlinerStretchingHistIncrease
 
 bool ShkenevIlinerStretchingHistIncreaseContrSEQ::ValidationImpl() {
   if (GetInput().empty()) {
-    return false;
+    return true;
   }
 
   return std::all_of(GetInput().begin(), GetInput().end(), [](int val) { return val >= 0 && val <= 255; });
